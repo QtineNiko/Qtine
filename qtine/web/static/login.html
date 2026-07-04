@@ -1,0 +1,37 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="theme-color" content="#141218"><title>Qtine 控制台 - 登录</title><style>
+:root{--p:#D0BCFF;--op:#381E72;--e:#F2B8B5;--bg:#141218;--sf:#211F26;--sfc:#2B2930;--on-s:#E6E1E5;--on-sv:#CAC4D0;--ol:#938F99;--rad-s:8px;--rad-m:12px;--rad-xl:28px;--rad-f:9999px;--elev3:0 1px 3px rgba(0,0,0,.3),0 4px 8px 3px rgba(0,0,0,.15);--tr:200ms cubic-bezier(.2,0,0,1)}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.card{background:var(--sf);border-radius:var(--rad-xl);padding:48px 40px;width:100%;max-width:400px;box-shadow:var(--elev3);text-align:center}
+.card h1{font:400 24px/32px Roboto,sans-serif;margin-bottom:4px}
+.card h1 span{color:var(--p)}
+.card p{color:var(--on-sv);margin-bottom:32px}
+.field{position:relative;margin-bottom:16px}
+.field input{width:100%;padding:14px 16px;background:var(--sfc);border:1px solid var(--ol);border-radius:var(--rad-s);font:400 16px/24px Roboto,sans-serif;color:var(--on-s);outline:none;transition:border var(--tr)}
+.field input:focus{border-color:var(--p)}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 24px;border-radius:var(--rad-f);font:500 14px/20px Roboto,sans-serif;border:none;cursor:pointer;transition:all var(--tr)}
+.btn-p{background:var(--p);color:var(--op);width:100%;padding:14px;margin-top:8px}
+.btn-p:hover{opacity:.9}
+.error{font-size:12px;color:var(--e);min-height:20px;margin-top:4px}
+.hint{font-size:12px;color:var(--on-sv);margin-top:16px}
+.hint code{color:var(--p);background:var(--sfc);padding:2px 8px;border-radius:4px;font:400 13px/20px 'Roboto Mono',monospace}
+</style></head><body>
+<div class="card" id="login-page">
+  <h1>Qtine <span>控制台</span></h1>
+  <p>输入管理令牌以登录</p>
+  <div class="field"><input type="password" id="token" placeholder="管理令牌"></div>
+  <div class="error" id="err"></div>
+  <button class="btn btn-p" id="submit">登 录</button>
+  <p class="hint">令牌在首次启动时生成，存储在 <code>data/token.txt</code></p>
+</div>
+<script>
+(function(){
+  var t=document.getElementById('token'),err=document.getElementById('err'),s=document.getElementById('submit');
+  s.onclick=function(){
+    fetch('/api/verify-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:t.value})}).then(function(r){return r.json()}).then(function(d){
+      if(d.valid){localStorage.setItem('qtine_auth','1');location.href='/webui/dashboard'}else{err.textContent='令牌无效'}
+    });
+  };
+  t.onkeydown=function(e){if(e.key==='Enter')s.click()};
+})();
+</script></body></html>

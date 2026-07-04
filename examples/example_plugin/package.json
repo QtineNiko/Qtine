@@ -1,0 +1,28 @@
+{
+  "name": "example-plugin",
+  "package": "qtine-plugin-example",
+  "version": "1.0.0",
+  "qtine_version": ">=1.1.0",
+  "author": "Your Name",
+  "description": "An example Qtine plugin demonstrating zip package structure",
+  "license": "MIT",
+  "repository": "https://github.com/user/qtine-plugin-example",
+  "main": "main.py",
+  "requirements": [],
+  "dependencies": {},
+  "permissions": ["message.receive", "message.send"],
+  "commands": [
+    {
+      "command": "/hello",
+      "aliases": ["/hi"],
+      "permission": "user",
+      "description": "Say hello"
+    },
+    {
+      "command": "/ping",
+      "aliases": ["/p"],
+      "permission": "user",
+      "description": "Ping pong test"
+    }
+  ]
+}

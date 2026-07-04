@@ -1,0 +1,70 @@
+# Qtine Configuration
+server:
+  host: "0.0.0.0"
+  port: 4990
+  debug: false
+
+adapters:
+  onebot_v11:
+    enabled: true
+    ws_path: "/onebot/v11"
+    access_token: ""
+    forward_ws_enabled: false
+    forward_ws_url: "ws://127.0.0.1:3001"
+    heartbeat_interval: 30
+    reconnect_interval: 5
+  discord:
+    enabled: false
+    token: ""
+  telegram:
+    enabled: false
+    bot_token: ""
+
+plugins:
+  dir: "./plugins"
+  autoload: []
+  marketplace_url: "https://qtine-market.example.com/api"
+  marketplace_mirrors:
+    - "https://mirror.qtine.dev/api"
+
+webui:
+  enabled: true
+  username: "admin"
+  password: "qtine123"
+  session_secret: "change-me-in-production"
+
+storage:
+  backend: "sqlite"
+  sqlite_path: "./data/qtine.db"
+  backup_interval_hours: 24
+  backup_keep_count: 7
+
+security:
+  super_admins:
+    - "你的QQ号"
+  rate_limit:
+    enabled: true
+    messages_per_second: 5
+    burst: 10
+  sensitive_words:
+    enabled: false
+    word_file: "./data/sensitive_words.txt"
+  blacklist:
+    enabled: true
+    users: []
+    groups: []
+
+ai:
+  enabled: false
+  provider: "openai"
+  api_key: ""
+  base_url: ""
+  model: "gpt-3.5-turbo"
+  max_tokens: 2048
+  temperature: 0.7
+
+logging:
+  level: "INFO"
+  file: "./data/logs/qtine.log"
+  max_size_mb: 10
+  backup_count: 5

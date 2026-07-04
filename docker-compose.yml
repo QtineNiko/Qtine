@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  qtine:
+    build: .
+    container_name: qtine
+    ports:
+      - "4990:4990"
+    volumes:
+      - ./config.yml:/app/config.yml
+      - ./data:/app/data
+      - ./plugins:/app/plugins
+    restart: unless-stopped
