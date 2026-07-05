@@ -1,0 +1,9 @@
+{
+  "name": "sdk_example",
+  "package": "qtine-plugin-sdk-example",
+  "version": "1.0.0",
+  "description": "SDK 示例插件",
+  "author": "you",
+  "entry": "main",
+  "requires": []
+}
