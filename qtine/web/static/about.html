@@ -1,0 +1,159 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="theme-color" content="#141218"><title>关于 Qtine</title><style>
+:root{--p:#D0BCFF;--op:#381E72;--pc:#4F378B;--sc:#4A4458;--e:#F2B8B5;--su:#7DD78D;--bg:#141218;--sf:#211F26;--sfc:#2B2930;--on-s:#E6E1E5;--on-sv:#CAC4D0;--ol:#938F99;--olv:#49454F;--rad-s:8px;--rad-m:12px;--rad-l:16px;--rad-xl:28px;--rad-f:9999px;--elev1:0 1px 2px rgba(0,0,0,.3),0 1px 3px 1px rgba(0,0,0,.15);--tr:200ms cubic-bezier(.2,0,0,1);--mono:400 13px/20px 'Roboto Mono',monospace}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.top-bar{display:flex;align-items:center;height:56px;padding:0 16px;background:var(--sf);border-bottom:1px solid var(--olv);flex-shrink:0}
+.top-bar .brand{font:400 22px/28px Roboto,sans-serif;flex:1;margin-left:12px}
+.top-bar .brand span{color:var(--p)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:var(--rad-f);font:500 14px/20px Roboto,sans-serif;border:1px solid var(--ol);cursor:pointer;transition:all var(--tr);background:transparent;color:var(--p)}
+.btn:hover{background:rgba(208,188,255,.08)}
+.layout{display:flex;flex:1;overflow:hidden}
+.nav{width:72px;background:var(--sf);border-right:1px solid var(--olv);display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:2px;flex-shrink:0}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;width:60px;padding:10px 2px;border:none;border-radius:var(--rad-l);background:transparent;color:var(--on-sv);cursor:pointer;font:500 11px/16px Roboto,sans-serif;transition:all var(--tr);text-align:center;text-decoration:none}
+.nav-item:hover{background:rgba(202,196,208,.08)}
+.nav-item.active{background:var(--sc);color:#E8DEF8}
+.nav-item svg{width:22px;height:22px;fill:currentColor}
+.nav-spacer{flex:1}
+.main{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:18px;align-items:center}
+.hero{display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px 24px;background:var(--sf);border:1px solid var(--olv);border-radius:var(--rad-xl);box-shadow:var(--elev1);max-width:680px;width:100%;text-align:center}
+.hero .logo{width:96px;height:96px;border-radius:var(--rad-l);object-fit:contain;background:var(--sfc);padding:8px}
+.hero h1{font:500 36px/44px Roboto,sans-serif;letter-spacing:.5px}
+.hero h1 span{color:var(--p)}
+.hero .subtitle{font:400 16px/24px Roboto,sans-serif;color:var(--on-sv);max-width:520px}
+.hero .version{display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border-radius:var(--rad-f);font:500 12px/16px Roboto,sans-serif;background:var(--pc);color:#EADDFF}
+.hero .links{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.hero .links a{padding:8px 18px;border-radius:var(--rad-f);font:500 13px/18px Roboto,sans-serif;border:1px solid var(--ol);color:var(--p);text-decoration:none;transition:all var(--tr)}
+.hero .links a:hover{background:rgba(208,188,255,.08)}
+.section{background:var(--sf);border:1px solid var(--olv);border-radius:var(--rad-l);padding:20px 24px;max-width:680px;width:100%;box-shadow:var(--elev1)}
+.section h2{font:500 16px/24px Roboto,sans-serif;color:var(--on-sv);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+.section p{font-size:14px;line-height:1.7;color:var(--on-s)}
+.section p.muted{color:var(--on-sv);font-size:13px}
+.contributors{display:flex;gap:10px;flex-wrap:wrap}
+.contributor{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--sfc);border:1px solid var(--olv);border-radius:var(--rad-f)}
+.contributor .avatar{width:32px;height:32px;border-radius:50%;background:var(--pc);color:#EADDFF;display:flex;align-items:center;justify-content:center;font:500 14px/18px Roboto,sans-serif}
+.contributor .name{font:500 14px/18px Roboto,sans-serif}
+.contributor .role{font:400 11px/14px Roboto,sans-serif;color:var(--on-sv)}
+.contact-list{display:flex;flex-direction:column;gap:12px}
+.contact-item{display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--sfc);border:1px solid var(--olv);border-radius:var(--rad-m);text-decoration:none;color:var(--on-s);transition:all var(--tr)}
+.contact-item:hover{border-color:var(--p);background:rgba(208,188,255,.05)}
+.contact-item .icon{width:36px;height:36px;border-radius:var(--rad-s);background:var(--pc);color:#EADDFF;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.contact-item .icon svg{width:20px;height:20px;fill:currentColor}
+.contact-item .text{flex:1;min-width:0}
+.contact-item .label{font:500 13px/18px Roboto,sans-serif}
+.contact-item .value{font:400 12px/16px Roboto,sans-serif;color:var(--on-sv);word-break:break-all}
+.tech-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.tech-item{padding:10px 14px;background:var(--sfc);border:1px solid var(--olv);border-radius:var(--rad-s);font:500 13px/18px Roboto,sans-serif;text-align:center}
+.footer-note{font-size:12px;color:var(--on-sv);text-align:center;padding:8px 0 16px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--olv);border-radius:3px}
+@media(max-width:768px){.nav{width:56px}.nav-item{width:48px;padding:8px 1px;font-size:10px}.main{padding:12px}.hero h1{font-size:28px}.hero .logo{width:72px;height:72px}}
+</style></head><body>
+<header class="top-bar">
+  <div style="display:flex;align-items:center;flex:1">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="var(--p)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+    <div class="brand">Qtine <span>关于</span></div>
+  </div>
+  <button class="btn" onclick="logout()">退出登录</button>
+</header>
+<div class="layout">
+  <nav class="nav">
+    <a class="nav-item" href="/webui/dashboard"><svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>仪表盘</a>
+    <a class="nav-item" href="/webui/plugins"><svg viewBox="0 0 24 24"><path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z"/></svg>插件</a>
+    <a class="nav-item" href="/webui/market"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>市场</a>
+    <a class="nav-item" href="/webui/adapters"><svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>适配器</a>
+    <a class="nav-item" href="/webui/logs"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>日志</a>
+    <a class="nav-item" href="/webui/settings"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.484.484 0 00-.48-.31h-3.84a.49.49 0 00-.48.31l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.485.485 0 00-.59.22L2.72 8.87a.49.49 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32a.49.49 0 00.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.08.19.26.31.48.31h3.84a.48.48 0 00.48-.31l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96a.49.49 0 00.59-.22l1.92-3.32a.484.484 0 00-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>设置</a>
+    <a class="nav-item active" href="/webui/about"><svg viewBox="0 0 24 24"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>关于</a>
+    <div class="nav-spacer"></div>
+  </nav>
+  <main class="main">
+    <div class="hero">
+      <img class="logo" src="/static/img/logo.png" alt="Qtine Logo">
+      <h1>Qtine</h1>
+      <div class="subtitle">轻量、可扩展的模块化聊天机器人框架 —— 让每一次对话都更可控、更有趣。</div>
+      <div class="version" id="ver">v1.1.0</div>
+      <div class="links">
+        <a href="https://github.com/QtineNiko/Qtine" target="_blank">GitHub 仓库</a>
+        <a href="/webui/dashboard">进入控制台</a>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>项目简介</h2>
+      <p>Qtine 是一个基于 Python 的模块化聊天机器人框架，原生支持 OneBot V11 协议，可对接 NapCat、Lagrange 等主流 QQ 协议端。</p>
+      <p class="muted" style="margin-top:8px">采用插件 + 适配器架构，内置 WebUI 控制台、事件总线、消息管道、存储后端与权限系统，开箱即用，亦可深度定制。</p>
+    </div>
+
+    <div class="section">
+      <h2>开发团队</h2>
+      <div class="contributors">
+        <div class="contributor">
+          <div class="avatar">Q</div>
+          <div>
+            <div class="name">QtineNiko</div>
+            <div class="role">开发团队 · 主开发者</div>
+          </div>
+        </div>
+      </div>
+      <h2 style="margin-top:18px">贡献者</h2>
+      <div class="contributors">
+        <div class="contributor">
+          <div class="avatar">白</div>
+          <div>
+            <div class="name">白然</div>
+            <div class="role">贡献者</div>
+          </div>
+        </div>
+        <div class="contributor">
+          <div class="avatar">三</div>
+          <div>
+            <div class="name">三月七</div>
+            <div class="role">贡献者</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>技术栈</h2>
+      <div class="tech-grid">
+        <div class="tech-item">Python 3.10+</div>
+        <div class="tech-item">Flask</div>
+        <div class="tech-item">Flask-SocketIO</div>
+        <div class="tech-item">OneBot V11</div>
+        <div class="tech-item">SQLite</div>
+        <div class="tech-item">VitePress</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>联系我们</h2>
+      <div class="contact-list">
+        <a class="contact-item" href="https://github.com/QtineNiko/Qtine" target="_blank">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.49.5.09.66-.22.66-.48 0-.24-.01-.87-.01-1.71-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02.8-.22 1.65-.33 2.5-.34.85 0 1.7.12 2.5.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85 0 1.34-.01 2.42-.01 2.75 0 .27.16.58.67.48A10.01 10.01 0 0022 12c0-5.52-4.48-10-10-10z"/></svg></div>
+          <div class="text">
+            <div class="label">GitHub 仓库</div>
+            <div class="value">github.com/QtineNiko/Qtine</div>
+          </div>
+        </a>
+        <a class="contact-item" href="https://qun.qq.com/universal-share/share?ac=1&authKey=MRq02bg%2B4OQLYei8U3MackeYPt%2FmsOBkU%2BhIdLUhUbuB1AeYwDZfk%2FtJYk16O7d2&busi_data=eyJncm91cENvZGUiOiIxMDQ3ODMwODY3IiwidG9rZW4iOiJJMW9DTUVzQlZ0OEprK2FWK05FaGh2d2xZRmIvNTZnRGxhVXAwWXhhejNPZmdsWVFWRE9OM3REQ0ZVWkdUQ2g0IiwidWluIjoiMzY3ODU1NTA3MiJ9&data=H1OJCYuh0Bs34dRCmJBmxPEtAc03-8XCmh7i28e8ToH8jV1Le_VM9Ne3rjxIb9BSqgyJhR2ts1lFh_P4aiAbnw&svctype=4&tempid=h5_group_info" target="_blank">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg></div>
+          <div class="text">
+            <div class="label">QQ 群 · Qtine 的小窝</div>
+            <div class="value">群号 1047830867 · 点击加入</div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <div class="footer-note">基于 MIT 协议发布 · 版权所有 © 2025 Qtine 开发团队</div>
+  </main>
+</div>
+<script>
+(function(){
+  function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
+  window.logout=logout;
+  fetch('/api/status').then(function(r){return r.json()}).then(function(d){
+    if(d&&d.version){document.getElementById('ver').textContent='v'+d.version}
+  }).catch(function(){});
+})();
+</script></body></html>

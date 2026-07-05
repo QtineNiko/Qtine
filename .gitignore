@@ -14,7 +14,7 @@ htmlcov/
 venv/
 env/
 .venv/
-.env/
+.env
 
 # IDE
 .idea/
@@ -38,3 +38,11 @@ data/uploads/
 .deps/
 vendor/
 get-pip.py
+
+# Node / VitePress
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+
+# docs-site 是独立的 GitHub Pages 仓库（QtineNiko.github.io），不纳入主仓库
+docs-site/

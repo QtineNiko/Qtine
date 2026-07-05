@@ -33,6 +33,92 @@ UPLOAD_DIR = os.path.join("data", "uploads")
 MAX_UPLOAD_MB = 50
 ALLOWED_EXTENSIONS = {"zip"}
 
+# Built-in marketplace demo entries. Used as fallback when no remote
+# marketplace source is configured (or the configured source is unreachable),
+# so the WebUI can still render the plugin market page out of the box.
+BUILTIN_MARKET_PLUGINS = [
+    {
+        "name": "ai-chat",
+        "version": "1.2.0",
+        "author": "QtineNiko",
+        "description": "AI 聊天插件，支持 OpenAI / Claude / 本地模型多轮对话与上下文记忆。",
+        "tags": ["AI", "聊天"],
+        "downloads": 1280,
+        "homepage": "https://github.com/QtineNiko/Qtine",
+        "size": "32 KB",
+    },
+    {
+        "name": "image-gen",
+        "version": "0.6.1",
+        "author": "白然",
+        "description": "文生图插件，调用 Stable Diffusion / 漫画风生成图片并发送。",
+        "tags": ["AI", "图像"],
+        "downloads": 642,
+        "homepage": "https://github.com/QtineNiko/Qtine",
+        "size": "48 KB",
+    },
+    {
+        "name": "weather",
+        "version": "2.0.3",
+        "author": "三月七",
+        "description": "天气查询，输入城市名返回实时天气与未来三天预报。",
+        "tags": ["工具", "查询"],
+        "downloads": 2150,
+        "homepage": "https://github.com/QtineNiko/Qtine",
+        "size": "16 KB",
+    },
+    {
+        "name": "music",
+        "version": "1.4.0",
+        "author": "QtineNiko",
+        "description": "点歌插件，支持网易云 / QQ 音乐搜索并分享卡片。",
+        "tags": ["娱乐", "音乐"],
+        "downloads": 3170,
+        "homepage": "https://github.com/QtineNiko/Qtine",
+        "size": "26 KB",
+    },
+    {
+        "name": "translate",
+        "version": "1.0.5",
+        "author": "白然",
+        "description": "多语言翻译，自动检测语种并翻译为目标语言。",
+        "tags": ["工具", "翻译"],
+        "downloads": 980,
+        "homepage": "https://github.com/QtineNiko/Qtine",
+        "size": "12 KB",
+    },
+    {
+        "name": "reminder",
+        "version": "0.9.2",
+        "author": "三月七",
+        "description": "定时提醒，支持一次性 / 周期任务，到点自动 @ 提醒对象。",
+        "tags": ["工具", "定时"],
+        "downloads": 1420,
+        "homepage": "https://github.com/QtineNiko/Qtine",
+        "size": "20 KB",
+    },
+    {
+        "name": "sign-in",
+        "version": "2.3.1",
+        "author": "QtineNiko",
+        "description": "签到积分系统，每日签到 / 连签奖励 / 排行榜。",
+        "tags": ["娱乐", "积分"],
+        "downloads": 2680,
+        "homepage": "https://github.com/QtineNiko/Qtine",
+        "size": "30 KB",
+    },
+    {
+        "name": "anti-recall",
+        "version": "1.1.0",
+        "author": "白然",
+        "description": "防撤回，记录群成员撤回的消息内容并提示管理员。",
+        "tags": ["管理", "工具"],
+        "downloads": 1730,
+        "homepage": "https://github.com/QtineNiko/Qtine",
+        "size": "14 KB",
+    },
+]
+
 
 class QtineBot:
     """Core bot instance that ties everything together."""
@@ -508,6 +594,20 @@ class QtineApp:
                 return auth
             return serve_page("settings.html")
 
+        @app.route("/webui/market")
+        def serve_market():
+            auth = self._check_auth()
+            if auth:
+                return auth
+            return serve_page("market.html")
+
+        @app.route("/webui/about")
+        def serve_about():
+            auth = self._check_auth()
+            if auth:
+                return auth
+            return serve_page("about.html")
+
         # ── health ─────────────────────────────────────────────────
 
         @app.route("/health")
@@ -639,6 +739,185 @@ class QtineApp:
                 return jsonify(
                     {"success": True, "name": result, "uploaded": dest}
                 )
+            return jsonify(
+                {"success": False, "error": "Plugin import failed"}
+            ), 400
+
+        # ── marketplace ────────────────────────────────────────────
+
+        @app.route("/api/market/plugins")
+        def api_market_plugins():
+            """Return plugin market listings.
+
+            Tries to fetch from the configured ``plugins.marketplace_url``
+            first; falls back to the built-in demo list when the source
+            is empty or unreachable so the WebUI always renders a list.
+            Each entry is annotated with ``installed`` based on the
+            currently loaded plugins.
+            """
+            installed_names = {
+                p.name for p in bot.plugin_manager.get_all_info()
+            }
+            source_url = (
+                self.config.get("plugins.marketplace_url", "") or ""
+            ).strip()
+            mirrors = (
+                self.config.get("plugins.marketplace_mirrors", []) or []
+            )
+            using_fallback = True
+            plugins: list = []
+
+            urls_to_try = [source_url] + list(mirrors)
+            for url in urls_to_try:
+                if not url:
+                    continue
+                try:
+                    import urllib.request
+                    import json as _json
+
+                    req = urllib.request.Request(
+                        url, headers={"Accept": "application/json"}
+                    )
+                    with urllib.request.urlopen(
+                        req, timeout=5
+                    ) as resp:
+                        raw = resp.read().decode("utf-8", "ignore")
+                    data = _json.loads(raw)
+                    # Support both {plugins: [...]} and bare list.
+                    if isinstance(data, list):
+                        plugins = data
+                    elif isinstance(data, dict):
+                        plugins = data.get("plugins") or data.get(
+                            "data"
+                        ) or []
+                    else:
+                        plugins = []
+                    plugins = plugins if isinstance(plugins, list) else []
+                    using_fallback = False
+                    break
+                except Exception as e:
+                    self.logger.warning(
+                        f"Market source {url} unreachable: {e}"
+                    )
+                    continue
+
+            if using_fallback:
+                # Deep copy the built-in demo list so callers can't mutate
+                # the module-level constant via the response.
+                plugins = [dict(p) for p in BUILTIN_MARKET_PLUGINS]
+
+            # Annotate installed state.
+            for p in plugins:
+                if isinstance(p, dict):
+                    p["installed"] = p.get("name") in installed_names
+
+            return jsonify({
+                "source": source_url,
+                "using_fallback": using_fallback,
+                "count": len(plugins),
+                "plugins": plugins,
+            })
+
+        @app.route("/api/market/source")
+        def api_market_source():
+            """Return the configured marketplace source URLs."""
+            return jsonify({
+                "url": self.config.get("plugins.marketplace_url", "") or "",
+                "mirrors": (
+                    self.config.get("plugins.marketplace_mirrors", []) or []
+                ),
+            })
+
+        @app.route("/api/market/source", methods=["POST"])
+        def api_market_source_set():
+            """Update the marketplace source URL and persist to config."""
+            data = request.get_json(silent=True) or {}
+            url = (data.get("url") or "").strip()
+            if not url:
+                return jsonify(
+                    {"success": False, "error": "url is required"}
+                ), 400
+            self.config.set("plugins.marketplace_url", url)
+            try:
+                self.config.save()
+            except Exception as e:
+                return jsonify(
+                    {"success": False, "error": f"Save failed: {e}"}
+                ), 500
+            self.logger.info(f"Marketplace source updated: {url}")
+            return jsonify({"success": True, "url": url})
+
+        @app.route("/api/market/install/<name>", methods=["POST"])
+        def api_market_install(name):
+            """Install a plugin from the marketplace source.
+
+            Resolves the plugin entry from the configured source (or the
+            built-in fallback list), downloads its ``download_url`` if
+            present, then hands the archive to PluginManager.
+            """
+            # Resolve plugin entry
+            source_url = (
+                self.config.get("plugins.marketplace_url", "") or ""
+            ).strip()
+            entry = None
+            try:
+                fetch_url = (
+                    source_url.rstrip("/") + "/plugins/" + name
+                    if source_url
+                    else ""
+                )
+                if fetch_url:
+                    import urllib.request
+                    import json as _json
+
+                    with urllib.request.urlopen(
+                        fetch_url, timeout=5
+                    ) as resp:
+                        entry = _json.loads(
+                            resp.read().decode("utf-8", "ignore")
+                        )
+            except Exception:
+                entry = None
+
+            if not entry:
+                for p in BUILTIN_MARKET_PLUGINS:
+                    if p["name"] == name:
+                        entry = p
+                        break
+
+            if not entry:
+                return jsonify(
+                    {"success": False, "error": "Plugin not found"}
+                ), 404
+
+            download_url = entry.get("download_url") or entry.get("url")
+            if not download_url:
+                return jsonify({
+                    "success": False,
+                    "error": "Plugin entry has no download_url; configure "
+                    "a real marketplace source to enable install.",
+                    "name": name,
+                }), 400
+
+            # Download to data/uploads/<name>.zip
+            try:
+                import urllib.request
+
+                os.makedirs(UPLOAD_DIR, exist_ok=True)
+                dest = os.path.join(UPLOAD_DIR, f"{name}.zip")
+                with urllib.request.urlopen(
+                    download_url, timeout=30
+                ) as r, open(dest, "wb") as out:
+                    out.write(r.read())
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "error": f"Download failed: {e}",
+                }), 500
+
+            result = bot.plugin_manager.import_from_zip(dest)
+            if result:
+                return jsonify({"success": True, "name": result})
             return jsonify(
                 {"success": False, "error": "Plugin import failed"}
             ), 400

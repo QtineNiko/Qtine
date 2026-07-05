@@ -1,0 +1,240 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="theme-color" content="#141218"><title>Qtine 插件市场</title><style>
+:root{--p:#D0BCFF;--op:#381E72;--pc:#4F378B;--sc:#4A4458;--e:#F2B8B5;--su:#7DD78D;--w:#FFD970;--bg:#141218;--sf:#211F26;--sfc:#2B2930;--on-s:#E6E1E5;--on-sv:#CAC4D0;--ol:#938F99;--olv:#49454F;--rad-s:8px;--rad-m:12px;--rad-l:16px;--rad-f:9999px;--elev1:0 1px 2px rgba(0,0,0,.3),0 1px 3px 1px rgba(0,0,0,.15);--tr:200ms cubic-bezier(.2,0,0,1);--mono:400 13px/20px 'Roboto Mono',monospace}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.top-bar{display:flex;align-items:center;height:56px;padding:0 16px;background:var(--sf);border-bottom:1px solid var(--olv);flex-shrink:0}
+.top-bar .brand{font:400 22px/28px Roboto,sans-serif;flex:1;margin-left:12px}
+.top-bar .brand span{color:var(--p)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:var(--rad-f);font:500 14px/20px Roboto,sans-serif;border:1px solid var(--ol);cursor:pointer;transition:all var(--tr);background:transparent;color:var(--p)}
+.btn:hover{background:rgba(208,188,255,.08)}
+.btn.danger{color:var(--e);border-color:var(--e)}.btn.danger:hover{background:rgba(242,184,181,.08)}
+.btn.primary{background:var(--p);color:var(--op);border-color:transparent}
+.btn.primary:hover{background:#E9DDFF}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.layout{display:flex;flex:1;overflow:hidden}
+.nav{width:72px;background:var(--sf);border-right:1px solid var(--olv);display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:2px;flex-shrink:0}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;width:60px;padding:10px 2px;border:none;border-radius:var(--rad-l);background:transparent;color:var(--on-sv);cursor:pointer;font:500 11px/16px Roboto,sans-serif;transition:all var(--tr);text-align:center;text-decoration:none}
+.nav-item:hover{background:rgba(202,196,208,.08)}
+.nav-item.active{background:var(--sc);color:#E8DEF8}
+.nav-item svg{width:22px;height:22px;fill:currentColor}
+.nav-spacer{flex:1}
+.main{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+.source-bar{display:flex;align-items:center;gap:10px;background:var(--sf);border:1px solid var(--olv);border-radius:var(--rad-m);padding:12px 16px}
+.source-bar .label{font:500 13px/18px Roboto,sans-serif;color:var(--on-sv)}
+.source-bar .url{font:var(--mono);color:var(--p);flex:1;word-break:break-all;font-size:13px}
+.source-bar .chip{display:inline-flex;align-items:center;padding:2px 10px;border-radius:var(--rad-s);font:500 11px/16px Roboto,sans-serif;background:var(--sfc);color:var(--on-s);border:1px solid var(--ol)}
+.source-bar .chip.ok{background:rgba(125,215,141,.15);color:var(--su)}
+.source-bar .chip.warn{background:rgba(255,217,112,.15);color:var(--w)}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.toolbar input[type=text]{flex:1;min-width:200px;padding:8px 14px;border-radius:var(--rad-f);border:1px solid var(--ol);background:var(--sf);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;outline:none}
+.toolbar input[type=text]:focus{border-color:var(--p)}
+.toolbar input[type=text]::placeholder{color:var(--ol)}
+.tag-filter{display:flex;gap:6px;flex-wrap:wrap}
+.tag-btn{padding:4px 12px;border-radius:var(--rad-f);font:500 12px/16px Roboto,sans-serif;border:1px solid var(--ol);background:transparent;color:var(--on-sv);cursor:pointer;transition:all var(--tr)}
+.tag-btn:hover{background:rgba(202,196,208,.08)}
+.tag-btn.active{background:var(--sc);color:#E8DEF8;border-color:transparent}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.card{background:var(--sf);border-radius:var(--rad-m);border:1px solid var(--olv);padding:18px;box-shadow:var(--elev1);display:flex;flex-direction:column;gap:8px}
+.card .head{display:flex;align-items:start;gap:12px}
+.card .icon{width:44px;height:44px;border-radius:var(--rad-s);background:var(--pc);color:#EADDFF;display:flex;align-items:center;justify-content:center;font:500 20px/24px Roboto,sans-serif;flex-shrink:0;text-transform:uppercase}
+.card h3{font:500 16px/24px Roboto,sans-serif}
+.card .meta{font-size:12px;color:var(--on-sv);margin-top:2px}
+.card .desc{font-size:13px;color:var(--on-s);min-height:40px;line-height:1.5}
+.card .tags{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;padding:2px 10px;border-radius:var(--rad-s);font:500 11px/16px Roboto,sans-serif;background:var(--sfc);color:var(--on-s);border:1px solid var(--ol)}
+.card .footer{display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding-top:12px;border-top:1px solid var(--olv)}
+.card .stats{font-size:12px;color:var(--on-sv);display:flex;gap:12px}
+.card .stats span{display:inline-flex;align-items:center;gap:4px}
+.card .actions{display:flex;gap:6px}
+.empty{padding:48px 16px;text-align:center;color:var(--on-sv)}
+.snackbar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:#332D41;color:#F5EFF7;padding:12px 24px;border-radius:var(--rad-s);font:400 14px/20px Roboto,sans-serif;z-index:50;opacity:0;transition:all .4s var(--tr)}
+.snackbar.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:60}
+.modal.show{display:flex}
+.modal .box{background:var(--sf);border:1px solid var(--olv);border-radius:var(--rad-l);padding:24px;width:90%;max-width:480px;display:flex;flex-direction:column;gap:14px}
+.modal h3{font:500 18px/24px Roboto,sans-serif}
+.modal p{font-size:13px;color:var(--on-sv);line-height:1.6}
+.modal input{padding:10px 14px;border-radius:var(--rad-s);border:1px solid var(--ol);background:var(--sfc);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;outline:none}
+.modal input:focus{border-color:var(--p)}
+.modal .actions{display:flex;justify-content:flex-end;gap:8px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--olv);border-radius:3px}
+@media(max-width:768px){.nav{width:56px}.nav-item{width:48px;padding:8px 1px;font-size:10px}.grid{grid-template-columns:1fr}.main{padding:12px}}
+</style></head><body>
+<header class="top-bar">
+  <div style="display:flex;align-items:center;flex:1">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="var(--p)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+    <div class="brand">Qtine <span>插件市场</span></div>
+  </div>
+  <button class="btn" onclick="openSourceModal()" style="margin-right:8px">配置源</button>
+  <button class="btn" onclick="load()" style="margin-right:8px">刷新</button>
+  <button class="btn" onclick="logout()">退出登录</button>
+</header>
+<div class="layout">
+  <nav class="nav">
+    <a class="nav-item" href="/webui/dashboard"><svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>仪表盘</a>
+    <a class="nav-item" href="/webui/plugins"><svg viewBox="0 0 24 24"><path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z"/></svg>插件</a>
+    <a class="nav-item active" href="/webui/market"><svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>市场</a>
+    <a class="nav-item" href="/webui/adapters"><svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>适配器</a>
+    <a class="nav-item" href="/webui/logs"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>日志</a>
+    <a class="nav-item" href="/webui/settings"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.484.484 0 00-.48-.31h-3.84a.49.49 0 00-.48.31l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.485.485 0 00-.59.22L2.72 8.87a.49.49 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32a.49.49 0 00.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.08.19.26.31.48.31h3.84a.48.48 0 00.48-.31l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96a.49.49 0 00.59-.22l1.92-3.32a.484.484 0 00-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>设置</a>
+    <a class="nav-item" href="/webui/about"><svg viewBox="0 0 24 24"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>关于</a>
+    <div class="nav-spacer"></div>
+  </nav>
+  <main class="main">
+    <div class="source-bar">
+      <span class="label">源：</span>
+      <span class="url" id="src-url">加载中...</span>
+      <span class="chip warn" id="src-chip">本地示例</span>
+      <button class="btn" onclick="openSourceModal()">修改</button>
+    </div>
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="搜索插件名称 / 作者 / 描述..." oninput="render()">
+      <div class="tag-filter" id="tag-filter"></div>
+    </div>
+    <div class="grid" id="grid"><div class="empty">加载中...</div></div>
+  </main>
+</div>
+<div class="snackbar" id="sb"></div>
+<div class="modal" id="src-modal">
+  <div class="box">
+    <h3>配置插件市场源</h3>
+    <p>填入市场 API 地址，Qtine 会从该地址拉取插件列表。留空则使用内置示例列表。地址应返回 JSON，格式为 <code style="color:var(--p)">{ "plugins": [...] }</code> 或直接为数组。</p>
+    <input type="text" id="src-input" placeholder="https://your-market.example.com/api">
+    <div class="actions">
+      <button class="btn" onclick="closeSourceModal()">取消</button>
+      <button class="btn primary" onclick="saveSource()">保存</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var ALL_PLUGINS=[];
+  var ALL_TAGS=[];
+  var ACTIVE_TAG='';
+  var KEYWORD='';
+
+  function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
+  function toast(m){var s=document.getElementById('sb');s.textContent=m;s.classList.add('show');clearTimeout(s._t);s._t=setTimeout(function(){s.classList.remove('show')},3000)}
+  window.logout=logout;
+  window.toast=toast;
+
+  function load(){
+    fetch('/api/market/plugins').then(function(r){
+      if(r.status===401){logout();return}
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
+      var url=document.getElementById('src-url');
+      var chip=document.getElementById('src-chip');
+      url.textContent=d.source||'（未配置，使用内置示例）';
+      if(d.using_fallback){
+        chip.textContent='本地示例';
+        chip.className='chip warn';
+      }else{
+        chip.textContent='已连接源';
+        chip.className='chip ok';
+      }
+      ALL_PLUGINS=(d.plugins||[]).map(function(p){
+        p._tags=(p.tags||[]).slice();
+        return p;
+      });
+      // Collect tags
+      var tagSet={};
+      ALL_PLUGINS.forEach(function(p){(p._tags||[]).forEach(function(t){tagSet[t]=1})});
+      ALL_TAGS=Object.keys(tagSet).sort();
+      renderTags();
+      render();
+    }).catch(function(){toast('加载失败')});
+  }
+
+  function renderTags(){
+    var box=document.getElementById('tag-filter');
+    box.innerHTML='';
+    var all=document.createElement('button');
+    all.className='tag-btn'+(ACTIVE_TAG===''?' active':'');
+    all.textContent='全部';
+    all.onclick=function(){ACTIVE_TAG='';renderTags();render()};
+    box.appendChild(all);
+    ALL_TAGS.forEach(function(t){
+      var b=document.createElement('button');
+      b.className='tag-btn'+(ACTIVE_TAG===t?' active':'');
+      b.textContent=t;
+      b.onclick=function(){ACTIVE_TAG=t;renderTags();render()};
+      box.appendChild(b);
+    });
+  }
+
+  function render(){
+    KEYWORD=(document.getElementById('search').value||'').toLowerCase().trim();
+    var grid=document.getElementById('grid');
+    grid.innerHTML='';
+    var list=ALL_PLUGINS.filter(function(p){
+      if(ACTIVE_TAG && (p._tags||[]).indexOf(ACTIVE_TAG)<0)return false;
+      if(KEYWORD){
+        var blob=(p.name+' '+(p.author||'')+' '+(p.description||'')+' '+(p._tags||[]).join(' ')).toLowerCase();
+        if(blob.indexOf(KEYWORD)<0)return false;
+      }
+      return true;
+    });
+    if(list.length===0){
+      grid.innerHTML='<div class="empty">没有匹配的插件</div>';
+      return;
+    }
+    list.forEach(function(p){
+      var c=document.createElement('div');c.className='card';
+      var initial=(p.name||'?').charAt(0).toUpperCase();
+      var tagsHtml=(p._tags||[]).map(function(t){return '<span class="chip">'+t+'</span>'}).join('');
+      var dl=p.downloads||0;
+      var dlText=dl>=1000?(dl/1000).toFixed(1)+'k':String(dl);
+      var btnHtml;
+      if(p.installed){
+        btnHtml='<button class="btn" disabled>已安装</button>';
+      }else{
+        btnHtml='<button class="btn primary" data-name="'+p.name+'" data-action="install">安装</button>';
+      }
+      c.innerHTML=
+        '<div class="head"><div class="icon">'+initial+'</div>'+
+        '<div style="flex:1"><h3>'+(p.name||'')+'</h3>'+
+        '<div class="meta">v'+(p.version||'?')+' · '+(p.author||'未知')+(p.size?' · '+p.size:'')+'</div></div></div>'+
+        '<div class="desc">'+(p.description||'（无描述）')+'</div>'+
+        '<div class="tags">'+tagsHtml+'</div>'+
+        '<div class="footer"><div class="stats"><span title="下载量">↓ '+dlText+'</span>'+
+        (p.homepage?'<a href="'+p.homepage+'" target="_blank" style="color:var(--p);text-decoration:none;font-size:12px">主页 →</a>':'')+
+        '</div><div class="actions">'+btnHtml+'</div></div>';
+      grid.appendChild(c);
+    });
+  }
+
+  document.getElementById('grid').addEventListener('click',function(e){
+    var b=e.target.closest('button');if(!b||!b.dataset.action)return;
+    if(b.dataset.action==='install'){
+      var name=b.dataset.name;
+      if(!confirm('确定要从市场安装 "'+name+'" 吗？'))return;
+      b.disabled=true;b.textContent='安装中...';
+      toast('正在安装 '+name+' ...');
+      fetch('/api/market/install/'+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+        if(d.success){toast('插件 '+d.name+' 安装成功');load()}
+        else{toast('安装失败: '+(d.error||'未知错误'));b.disabled=false;b.textContent='安装'}
+      }).catch(function(){toast('安装失败');b.disabled=false;b.textContent='安装'});
+    }
+  });
+
+  // Source modal
+  window.openSourceModal=function(){
+    fetch('/api/market/source').then(function(r){return r.json()}).then(function(d){
+      document.getElementById('src-input').value=d.url||'';
+      document.getElementById('src-modal').classList.add('show');
+    });
+  };
+  window.closeSourceModal=function(){document.getElementById('src-modal').classList.remove('show')};
+  window.saveSource=function(){
+    var url=document.getElementById('src-input').value.trim();
+    fetch('/api/market/source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})}).then(function(r){return r.json()}).then(function(d){
+      if(d.success){toast('源已保存');closeSourceModal();load()}
+      else{toast('保存失败: '+(d.error||'未知错误'))}
+    }).catch(function(){toast('保存失败')});
+  };
+
+  load();
+})();
+</script></body></html>
