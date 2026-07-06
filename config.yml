@@ -1,70 +1,62 @@
-# Qtine Configuration
-server:
-  host: "0.0.0.0"
-  port: 4990
-  debug: false
-
 adapters:
-  onebot_v11:
-    enabled: true
-    ws_path: "/onebot/v11"
-    access_token: ""
-    forward_ws_enabled: false
-    forward_ws_url: "ws://127.0.0.1:3001"
-    heartbeat_interval: 30
-    reconnect_interval: 5
   discord:
     enabled: false
-    token: ""
-  telegram:
-    enabled: false
-    bot_token: ""
-
-plugins:
-  dir: "./plugins"
-  autoload: []
-  marketplace_url: "https://qtine-market.example.com/api"
-  marketplace_mirrors:
-    - "https://mirror.qtine.dev/api"
-
-webui:
-  enabled: true
-  username: "admin"
-  password: "qtine123"
-  session_secret: "change-me-in-production"
-
-storage:
-  backend: "sqlite"
-  sqlite_path: "./data/qtine.db"
-  backup_interval_hours: 24
-  backup_keep_count: 7
-
-security:
-  super_admins:
-    - "你的QQ号"
-  rate_limit:
+    token: ''
+  onebot_v11:
+    access_token: ''
     enabled: true
-    messages_per_second: 5
-    burst: 10
-  sensitive_words:
+    forward_ws_enabled: false
+    forward_ws_url: ws://127.0.0.1:3001
+    heartbeat_interval: 30
+    reconnect_interval: 5
+    ws_path: /onebot/v11
+  telegram:
+    bot_token: ''
     enabled: false
-    word_file: "./data/sensitive_words.txt"
+ai:
+  api_key: ''
+  base_url: ''
+  enabled: false
+  max_tokens: 2048
+  model: gpt-3.5-turbo
+  provider: openai
+  temperature: 0.7
+logging:
+  backup_count: 5
+  file: ./data/logs/qtine.log
+  level: INFO
+  max_size_mb: 10
+plugins:
+  autoload: []
+  dir: ./plugins
+  marketplace_mirrors:
+  - https://mirror.qtine.dev/api
+  marketplace_url: https://qtine-market.example.com/api
+security:
   blacklist:
     enabled: true
-    users: []
     groups: []
-
-ai:
-  enabled: false
-  provider: "openai"
-  api_key: ""
-  base_url: ""
-  model: "gpt-3.5-turbo"
-  max_tokens: 2048
-  temperature: 0.7
-
-logging:
-  level: "INFO"
-  file: "./data/logs/qtine.log"
-  max_size_mb: 10
-  backup_count: 5
+    users: []
+  rate_limit:
+    burst: 10
+    enabled: true
+    messages_per_second: 5
+  sensitive_words:
+    enabled: false
+    word_file: ./data/sensitive_words.txt
+  super_admins:
+  - 你的QQ号
+server:
+  debug: false
+  host: 0.0.0.0
+  port: 4990
+storage:
+  backend: sqlite
+  backup_interval_hours: 24
+  backup_keep_count: 7
+  sqlite_path: ./data/qtine.db
+webui:
+  enabled: true
+  password: qtine123
+  session_secret: change-me-in-production
+  username: admin

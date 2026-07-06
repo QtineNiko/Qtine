@@ -12,6 +12,12 @@ class BanPlugin(BasePlugin):
 
     def __init__(self, bot=None):
         super().__init__(bot)
+        self.add_config("ban_duration_minutes", "默认封禁时长(分钟)", default=0,
+                        config_type="number",
+                        description="默认封禁时长，0 表示永久封禁")
+        self.add_config("notify_on_ban", "封禁时通知", default=True,
+                        config_type="boolean",
+                        description="封禁/解封时是否在群里发消息通知")
         self.register_command("/ban", self.handle_ban,
                               aliases=["/封禁"],
                               permission="admin")

@@ -52,6 +52,8 @@ class BasePlugin(ABC):
         self._regex_handlers: List[tuple] = []
         self._keyword_handlers: List[tuple] = []
         self._event_handlers: List[tuple] = []
+        self._config_schema: List[dict] = []
+        self._config_cache: Dict[str, Any] = {}
         self._loaded_at = time.time()
 
     def on_enable(self):
@@ -65,6 +67,125 @@ class BasePlugin(ABC):
 
     def on_unload(self):
         pass
+
+    def add_config(self, key: str, label: str, default: Any = None,
+                   config_type: str = "text", description: str = "",
+                   options: List[dict] = None):
+        """声明一个插件配置项。
+
+        Args:
+            key: 配置键名
+            label: 显示名称
+            default: 默认值
+            config_type: 类型（text/number/boolean/select/textarea/password）
+            description: 描述说明
+            options: 下拉选项（config_type=select 时用，[{"label":..., "value":...}]）
+        """
+        self._config_schema.append({
+            "key": key,
+            "label": label,
+            "default": default,
+            "type": config_type,
+            "description": description,
+            "options": options or [],
+        })
+
+    def get_config(self, key: str, default: Any = None) -> Any:
+        """读取插件配置，带缓存。"""
+        if not self.bot or not self.bot.storage:
+            return default
+        storage_key = f"plugin_config.{self.name}.{key}"
+        if key in self._config_cache:
+            return self._config_cache[key]
+        # 找 schema 里的 default
+        schema_default = default
+        for item in self._config_schema:
+            if item["key"] == key:
+                schema_default = item["default"] if default is None else default
+                break
+        value = self.bot.storage.get(storage_key, schema_default)
+        self._config_cache[key] = value
+        return value
+
+    def set_config(self, key: str, value: Any) -> None:
+        """设置插件配置并写回存储。"""
+        if not self.bot or not self.bot.storage:
+            return
+        storage_key = f"plugin_config.{self.name}.{key}"
+        self.bot.storage.set(storage_key, value)
+        self._config_cache[key] = value
+
+    def get_config_schema(self) -> List[dict]:
+        """返回配置 schema。"""
+        return list(self._config_schema)
+
+    def get_all_config_values(self) -> Dict[str, Any]:
+        """返回所有配置的当前值。"""
+        result = {}
+        for item in self._config_schema:
+            result[item["key"]] = self.get_config(item["key"], item["default"])
+        return result
+
+    def get_group_config(self, group_id: str, key: str, default: Any = None) -> Any:
+        """读取群级别的插件配置，带缓存。"""
+        if not self.bot or not self.bot.storage or not group_id:
+            return self.get_config(key, default)
+        storage_key = f"plugin_config.{self.name}.group.{group_id}.{key}"
+        cache_key = f"__group__{group_id}__{key}"
+        if cache_key in self._config_cache:
+            return self._config_cache[cache_key]
+        # 如果存储里没有这个群的配置，fallback 到全局配置
+        value = self.bot.storage.get(storage_key, None)
+        if value is None:
+            value = self.get_config(key, default)
+        self._config_cache[cache_key] = value
+        return value
+
+    def set_group_config(self, group_id: str, key: str, value: Any) -> None:
+        """设置群级别的插件配置。"""
+        if not self.bot or not self.bot.storage or not group_id:
+            return
+        storage_key = f"plugin_config.{self.name}.group.{group_id}.{key}"
+        cache_key = f"__group__{group_id}__{key}"
+        self.bot.storage.set(storage_key, value)
+        self._config_cache[cache_key] = value
+
+    def reset_group_config(self, group_id: str) -> int:
+        """重置某个群的所有配置（回归全局默认）。返回删除的配置数。"""
+        if not self.bot or not self.bot.storage or not group_id:
+            return 0
+        prefix = f"plugin_config.{self.name}.group.{group_id}."
+        keys = self.bot.storage.keys(prefix)
+        count = 0
+        for k in keys:
+            self.bot.storage.delete(k)
+            count += 1
+        # 清缓存里该群的
+        to_del = [k for k in self._config_cache if k.startswith(f"__group__{group_id}__")]
+        for k in to_del:
+            del self._config_cache[k]
+        return count
+
+    def get_group_config_values(self, group_id: str) -> Dict[str, Any]:
+        """返回某个群的所有配置值（没有配置的项用全局值）。"""
+        result = {}
+        for item in self._config_schema:
+            result[item["key"]] = self.get_group_config(group_id, item["key"], item["default"])
+        return result
+
+    def get_group_list(self) -> List[str]:
+        """返回有独立配置的群列表。"""
+        if not self.bot or not self.bot.storage:
+            return []
+        prefix = f"plugin_config.{self.name}.group."
+        keys = self.bot.storage.keys(prefix)
+        groups = set()
+        for k in keys:
+            rest = k[len(prefix):]
+            parts = rest.split(".", 1)
+            if parts:
+                groups.add(parts[0])
+        return sorted(groups)
 
     def get_info(self) -> PluginInfo:
         hooks = []

@@ -7,6 +7,7 @@ import os
 import sqlite3
 import threading
 import time
+from collections import deque
 from abc import ABC, abstractmethod
 from qtine.utils.logger import get_logger
 
@@ -21,6 +22,19 @@ class StorageBackend(ABC):
     @abstractmethod
     def keys(self, prefix: str = "") -> List[str]: ...
     @abstractmethod
+    def add_message(self, message_id: str, group_id: Optional[str], user_id: str,
+                    nickname: str, content: str, message_type: str = "text",
+                    adapter: str = "") -> None: ...
+    @abstractmethod
+    def get_messages(self, group_id: Optional[str] = None,
+                     limit: int = 50, offset: int = 0,
+                     user_id: Optional[str] = None,
+                     keyword: Optional[str] = None) -> List[dict]: ...
+    @abstractmethod
+    def clear_messages(self, group_id: Optional[str] = None) -> int: ...
+    @abstractmethod
+    def get_message_groups(self) -> List[dict]: ...
+    @abstractmethod
     def close(self) -> None: ...
 
 
@@ -28,6 +42,7 @@ class MemoryStorage(StorageBackend):
     def __init__(self):
         self._data: Dict[str, Any] = {}
         self._lock = threading.Lock()
+        self._messages: deque = deque(maxlen=2000)
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)
@@ -44,6 +59,63 @@ class MemoryStorage(StorageBackend):
         if prefix:
             return [k for k in self._data if k.startswith(prefix)]
         return list(self._data.keys())
+
+    def add_message(self, message_id: str, group_id: Optional[str], user_id: str,
+                    nickname: str, content: str, message_type: str = "text",
+                    adapter: str = "") -> None:
+        with self._lock:
+            self._messages.append({
+                "message_id": message_id,
+                "group_id": group_id or "",
+                "user_id": user_id,
+                "nickname": nickname,
+                "content": content,
+                "message_type": message_type,
+                "adapter": adapter,
+                "timestamp": time.time(),
+            })
+
+    def get_messages(self, group_id: Optional[str] = None,
+                     limit: int = 50, offset: int = 0,
+                     user_id: Optional[str] = None,
+                     keyword: Optional[str] = None) -> List[dict]:
+        with self._lock:
+            results = list(self._messages)
+        if group_id is not None:
+            results = [m for m in results if m["group_id"] == group_id]
+        if user_id:
+            results = [m for m in results if m["user_id"] == user_id]
+        if keyword:
+            results = [m for m in results if keyword.lower() in m["content"].lower()]
+        results.reverse()
+        return results[offset:offset + limit]
+
+    def clear_messages(self, group_id: Optional[str] = None) -> int:
+        with self._lock:
+            if group_id is None:
+                count = len(self._messages)
+                self._messages.clear()
+                return count
+            before = len(self._messages)
+            self._messages = deque(
+                [m for m in self._messages if m["group_id"] != group_id],
+                maxlen=2000
+            )
+            return before - len(self._messages)
+
+    def get_message_groups(self) -> List[dict]:
+        groups = {}
+        with self._lock:
+            for m in self._messages:
+                gid = m["group_id"] or "私聊"
+                if gid not in groups:
+                    groups[gid] = {"group_id": gid, "count": 0,
+                                   "last_time": m["timestamp"]}
+                groups[gid]["count"] += 1
+                groups[gid]["last_time"] = m["timestamp"]
+        result = list(groups.values())
+        result.sort(key=lambda x: x["last_time"], reverse=True)
+        return result
 
     def close(self) -> None:
         self._data.clear()
@@ -73,6 +145,31 @@ class SQLiteStorage(StorageBackend):
                 value TEXT NOT NULL,
                 updated_at REAL DEFAULT (strftime('%s','now'))
             )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS message_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id TEXT,
+                group_id TEXT,
+                user_id TEXT NOT NULL,
+                nickname TEXT DEFAULT '',
+                content TEXT NOT NULL,
+                message_type TEXT DEFAULT 'text',
+                adapter TEXT DEFAULT '',
+                timestamp REAL DEFAULT (strftime('%s','now'))
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_msg_group
+            ON message_history(group_id)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_msg_user
+            ON message_history(user_id)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_msg_time
+            ON message_history(timestamp DESC)
         """)
         conn.commit()
 
@@ -116,6 +213,72 @@ class SQLiteStorage(StorageBackend):
         else:
             cursor = conn.execute("SELECT key FROM kv_store")
         return [row[0] for row in cursor.fetchall()]
+
+    def add_message(self, message_id: str, group_id: Optional[str], user_id: str,
+                    nickname: str, content: str, message_type: str = "text",
+                    adapter: str = "") -> None:
+        with self._lock:
+            conn = self._get_conn()
+            conn.execute(
+                """INSERT INTO message_history
+                   (message_id, group_id, user_id, nickname, content,
+                    message_type, adapter, timestamp)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (message_id, group_id, user_id, nickname, content,
+                 message_type, adapter, time.time())
+            )
+            conn.commit()
+
+    def get_messages(self, group_id: Optional[str] = None,
+                     limit: int = 50, offset: int = 0,
+                     user_id: Optional[str] = None,
+                     keyword: Optional[str] = None) -> List[dict]:
+        conn = self._get_conn()
+        query = "SELECT * FROM message_history WHERE 1=1"
+        params: list = []
+        if group_id is not None:
+            query += " AND group_id = ?"
+            params.append(group_id)
+        if user_id:
+            query += " AND user_id = ?"
+            params.append(user_id)
+        if keyword:
+            query += " AND content LIKE ?"
+            params.append(f"%{keyword}%")
+        query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        cursor = conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def clear_messages(self, group_id: Optional[str] = None) -> int:
+        with self._lock:
+            conn = self._get_conn()
+            if group_id is None:
+                cursor = conn.execute("SELECT COUNT(*) FROM message_history")
+                count = cursor.fetchone()[0]
+                conn.execute("DELETE FROM message_history")
+            else:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) FROM message_history WHERE group_id = ?",
+                    (group_id,)
+                )
+                count = cursor.fetchone()[0]
+                conn.execute(
+                    "DELETE FROM message_history WHERE group_id = ?",
+                    (group_id,)
+                )
+            conn.commit()
+            return count
+
+    def get_message_groups(self) -> List[dict]:
+        conn = self._get_conn()
+        cursor = conn.execute("""
+            SELECT group_id, COUNT(*) as count, MAX(timestamp) as last_time
+            FROM message_history
+            GROUP BY group_id
+            ORDER BY last_time DESC
+        """)
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self) -> None:
         if self._conn:
@@ -161,6 +324,24 @@ class Storage:
 
     def keys(self, prefix: str = "") -> List[str]:
         return self._backend.keys(prefix)
+
+    def add_message(self, message_id: str, group_id: Optional[str], user_id: str,
+                    nickname: str, content: str, message_type: str = "text",
+                    adapter: str = "") -> None:
+        self._backend.add_message(message_id, group_id, user_id, nickname,
+                                  content, message_type, adapter)
+
+    def get_messages(self, group_id: Optional[str] = None,
+                     limit: int = 50, offset: int = 0,
+                     user_id: Optional[str] = None,
+                     keyword: Optional[str] = None) -> List[dict]:
+        return self._backend.get_messages(group_id, limit, offset, user_id, keyword)
+
+    def clear_messages(self, group_id: Optional[str] = None) -> int:
+        return self._backend.clear_messages(group_id)
+
+    def get_message_groups(self) -> List[dict]:
+        return self._backend.get_message_groups()
 
     def close(self) -> None:
         self._backend.close()

@@ -9,7 +9,7 @@ import time
 import threading
 from typing import Optional, Dict
 
-from flask import Flask, request, jsonify, send_from_directory, redirect, abort
+from flask import Flask, request, jsonify, send_from_directory, redirect, abort, Response
 from flask_socketio import SocketIO
 from simple_websocket import Server
 from werkzeug.utils import secure_filename
@@ -24,6 +24,7 @@ from qtine.core.pipeline import MessagePipeline, PipelineContext
 from qtine.core.session import SessionManager
 from qtine.core.plugin_manager import PluginManager
 from qtine.core.adapter_manager import AdapterManager
+from qtine.core.scheduler import TaskScheduler
 from qtine.utils.models import Message, Sender, AdapterStatus
 from qtine.utils.logger import QtineLogger, get_logger
 from qtine.storage.backend import Storage
@@ -132,6 +133,8 @@ class QtineBot:
         self.session_manager = SessionManager()
         self.plugin_manager = PluginManager()
         self.adapter_manager = AdapterManager()
+        self.scheduler = TaskScheduler()
+        self.scheduler.set_bot(self)
         self._start_time = time.time()
         self._running = False
         # rate limiting state: {user_id: [timestamps]}
@@ -281,6 +284,20 @@ class QtineBot:
             f"{sender_name}({sender_id}): {message.content[:200]}"
         )
 
+        # 记录消息历史
+        try:
+            self.storage.add_message(
+                message_id=message.message_id or "",
+                group_id=message.group_id if message.is_group() else None,
+                user_id=sender_id,
+                nickname=sender_name,
+                content=message.content,
+                message_type=message.message_type or "text",
+                adapter=message.adapter or "",
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to log message history: {e}")
+
         blacklist = self.storage.get("blacklist_users", [])
         if message.sender and message.sender.user_id in blacklist:
             self.logger.debug(
@@ -319,6 +336,20 @@ class QtineBot:
             {"message": message, "response": response},
         )
 
+        # Trigger webhooks
+        try:
+            self._trigger_webhooks("message.received", {
+                "message_id": message.message_id,
+                "group_id": message.group_id,
+                "user_id": sender_id,
+                "nickname": sender_name,
+                "content": message.content,
+                "adapter": message.adapter,
+                "timestamp": time.time(),
+            })
+        except Exception as e:
+            self.logger.warning(f"Webhook trigger error: {e}")
+
     def send(self, message: Message, text: str):
         if message.is_group() and message.group_id:
             return self.adapter_manager.send_message(
@@ -347,6 +378,50 @@ class QtineBot:
             return False
         admins = self.config.get("security.super_admins", [])
         return message.sender.user_id in admins
+
+    def _trigger_webhooks(self, event: str, payload: dict):
+        """Send webhook requests for matching webhooks."""
+        webhooks = self.storage.get("webhooks", [])
+        if not webhooks:
+            return
+        import urllib.request
+        import json as _json
+
+        for wh in webhooks:
+            if not wh.get("enabled", True):
+                continue
+            if wh.get("event") != event:
+                continue
+            url = wh.get("url", "")
+            if not url:
+                continue
+            try:
+                data = _json.dumps({
+                    "event": event,
+                    "timestamp": time.time(),
+                    "data": payload,
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    url,
+                    data=data,
+                    headers={
+                        "Content-Type": "application/json",
+                        "User-Agent": "Qtine-Bot",
+                    },
+                    method="POST",
+                )
+                # Fire and forget with timeout
+                def do_req(r):
+                    try:
+                        with urllib.request.urlopen(r, timeout=5):
+                            pass
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Webhook '{wh.get('name', url)}' failed: {e}"
+                        )
+                threading.Thread(target=do_req, args=(req,), daemon=True).start()
+            except Exception as e:
+                self.logger.warning(f"Webhook prepare failed: {e}")
 
     def _check_rate_limit(self, user_id: str) -> bool:
         """Token-bucket style rate limit check. Returns True if allowed."""
@@ -404,7 +479,6 @@ class QtineBot:
         from qtine.plugins.builtin.help import HelpPlugin
         from qtine.plugins.builtin.echo import EchoPlugin
         from qtine.plugins.builtin.admin import AdminPlugin
-        from qtine.plugins.builtin.welcome import WelcomePlugin
         from qtine.plugins.builtin.repeat import RepeatPlugin
         from qtine.plugins.builtin.ban import BanPlugin
 
@@ -412,7 +486,6 @@ class QtineBot:
             HelpPlugin(bot=self),
             EchoPlugin(bot=self),
             AdminPlugin(bot=self),
-            WelcomePlugin(bot=self),
             RepeatPlugin(bot=self),
             BanPlugin(bot=self),
         ]
@@ -422,11 +495,13 @@ class QtineBot:
 
     def start(self):
         self._running = True
+        self.scheduler.start()
         self.event_bus.publish("bot.started", {"time": time.time()})
         self.logger.info("Qtine bot started")
 
     def shutdown(self):
         self._running = False
+        self.scheduler.stop()
         self.event_bus.publish("bot.stopped", {"time": time.time()})
         self.adapter_manager.stop_all()
         self.storage.close()
@@ -587,6 +662,20 @@ class QtineApp:
                 return auth
             return serve_page("logs.html")
 
+        @app.route("/webui/messages")
+        def serve_messages():
+            auth = self._check_auth()
+            if auth:
+                return auth
+            return serve_page("messages.html")
+
+        @app.route("/webui/tasks")
+        def serve_tasks():
+            auth = self._check_auth()
+            if auth:
+                return auth
+            return serve_page("tasks.html")
+
         @app.route("/webui/settings")
         def serve_settings():
             auth = self._check_auth()
@@ -607,6 +696,157 @@ class QtineApp:
             if auth:
                 return auth
             return serve_page("about.html")
+
+        # ── backup / restore ──────────────────────────────────────
+
+        @app.route("/api/backup", methods=["GET"])
+        def api_backup():
+            """导出配置 + 存储数据 + 插件列表为 zip。"""
+            import io
+            import zipfile
+            import yaml as _yaml
+            from datetime import datetime
+
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                # config.yml
+                try:
+                    config_yaml = _yaml.dump(
+                        self.config.data,
+                        allow_unicode=True,
+                        default_flow_style=False,
+                        sort_keys=False,
+                    )
+                    zf.writestr("config.yml", config_yaml)
+                except Exception as e:
+                    self.logger.warning(f"backup: config export failed: {e}")
+
+                # storage (as JSON)
+                try:
+                    all_keys = bot.storage.keys()
+                    storage_data = {k: bot.storage.get(k) for k in all_keys}
+                    zf.writestr(
+                        "storage.json",
+                        json.dumps(storage_data, ensure_ascii=False, indent=2),
+                    )
+                except Exception as e:
+                    self.logger.warning(f"backup: storage export failed: {e}")
+
+                # plugin list
+                try:
+                    plugins = [p.to_dict() for p in bot.plugin_manager.get_all_info()]
+                    zf.writestr(
+                        "plugins.json",
+                        json.dumps(plugins, ensure_ascii=False, indent=2),
+                    )
+                except Exception as e:
+                    self.logger.warning(f"backup: plugin list failed: {e}")
+
+                # metadata
+                meta = {
+                    "version": "1",
+                    "generated_at": datetime.now().isoformat(),
+                    "qtine_version": __import__("qtine").__version__,
+                }
+                zf.writestr("meta.json", json.dumps(meta, ensure_ascii=False, indent=2))
+
+            buffer.seek(0)
+            filename = f"qtine-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
+            return Response(
+                buffer.getvalue(),
+                mimetype="application/zip",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+        @app.route("/api/restore", methods=["POST"])
+        def api_restore():
+            """从 zip 恢复配置、存储数据。"""
+            import zipfile
+            import yaml as _yaml
+
+            if "file" not in request.files:
+                return jsonify({"success": False, "error": "没有文件"}), 400
+            f = request.files["file"]
+            if not f.filename.endswith(".zip"):
+                return jsonify({"success": False, "error": "只支持 .zip 文件"}), 400
+
+            try:
+                dest = self._save_upload(f)
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e)}), 400
+
+            try:
+                with zipfile.ZipFile(dest, "r") as zf:
+                    names = zf.namelist()
+
+                    # 恢复 config.yml
+                    if "config.yml" in names:
+                        try:
+                            data = _yaml.safe_load(zf.read("config.yml").decode("utf-8"))
+                            if isinstance(data, dict):
+                                self.config.data = data
+                                self.config.save()
+                                self.logger.info("restore: config restored")
+                        except Exception as e:
+                            self.logger.warning(f"restore: config failed: {e}")
+
+                    # 恢复 storage
+                    if "storage.json" in names:
+                        try:
+                            data = json.loads(zf.read("storage.json").decode("utf-8"))
+                            if isinstance(data, dict):
+                                for k, v in data.items():
+                                    bot.storage.set(k, v)
+                                # 清所有插件配置缓存
+                                for p in bot.plugin_manager.get_all():
+                                    p._config_cache.clear()
+                                self.logger.info(
+                                    f"restore: {len(data)} storage keys restored"
+                                )
+                        except Exception as e:
+                            self.logger.warning(f"restore: storage failed: {e}")
+
+                return jsonify({"success": True, "message": "恢复成功，部分设置可能需要重启生效"})
+            except Exception as e:
+                return jsonify({"success": False, "error": f"恢复失败: {str(e)}"}), 400
+
+        # ── message history ────────────────────────────────────────
+
+        @app.route("/api/messages")
+        def api_messages():
+            group_id = request.args.get("group_id", type=str)
+            if group_id == "":
+                group_id = None
+            user_id = request.args.get("user_id", type=str) or None
+            keyword = request.args.get("keyword", type=str) or None
+            limit = min(request.args.get("limit", 50, type=int), 200)
+            offset = request.args.get("offset", 0, type=int)
+            messages = bot.storage.get_messages(
+                group_id=group_id,
+                limit=limit,
+                offset=offset,
+                user_id=user_id,
+                keyword=keyword,
+            )
+            return jsonify({
+                "success": True,
+                "messages": messages,
+                "total": len(messages),
+            })
+
+        @app.route("/api/messages/groups")
+        def api_message_groups():
+            groups = bot.storage.get_message_groups()
+            return jsonify({"success": True, "groups": groups})
+
+        @app.route("/api/messages/clear", methods=["POST"])
+        def api_messages_clear():
+            data = request.get_json(silent=True) or {}
+            group_id = data.get("group_id")
+            if group_id == "":
+                group_id = None
+            count = bot.storage.clear_messages(group_id=group_id)
+            return jsonify({"success": True, "cleared": count})
 
         # ── health ─────────────────────────────────────────────────
 
@@ -742,6 +982,84 @@ class QtineApp:
             return jsonify(
                 {"success": False, "error": "Plugin import failed"}
             ), 400
+
+        # ── plugin config ──────────────────────────────────────────
+
+        @app.route("/api/plugins/<name>/config")
+        def api_plugin_config(name):
+            plugin = bot.plugin_manager.get(name)
+            if not plugin:
+                return jsonify({"success": False, "error": "Plugin not found"}), 404
+            schema = plugin.get_config_schema()
+            values = plugin.get_all_config_values()
+            return jsonify({
+                "success": True,
+                "name": name,
+                "schema": schema,
+                "values": values,
+            })
+
+        @app.route("/api/plugins/<name>/config", methods=["POST"])
+        def api_plugin_config_save(name):
+            plugin = bot.plugin_manager.get(name)
+            if not plugin:
+                return jsonify({"success": False, "error": "Plugin not found"}), 404
+            data = request.get_json(silent=True) or {}
+            values = data.get("values", {})
+            for key, value in values.items():
+                plugin.set_config(key, value)
+            # 清缓存
+            plugin._config_cache.clear()
+            return jsonify({"success": True, "values": plugin.get_all_config_values()})
+
+        # ── plugin group config ────────────────────────────────────
+
+        @app.route("/api/plugins/<name>/group-config")
+        def api_plugin_group_config(name):
+            plugin = bot.plugin_manager.get(name)
+            if not plugin:
+                return jsonify({"success": False, "error": "Plugin not found"}), 404
+            group_id = request.args.get("group_id", "")
+            if not group_id:
+                return jsonify({"success": False, "error": "缺少 group_id"}), 400
+            schema = plugin.get_config_schema()
+            values = plugin.get_group_config_values(group_id)
+            return jsonify({
+                "success": True,
+                "name": name,
+                "group_id": group_id,
+                "schema": schema,
+                "values": values,
+            })
+
+        @app.route("/api/plugins/<name>/group-config", methods=["POST"])
+        def api_plugin_group_config_save(name):
+            plugin = bot.plugin_manager.get(name)
+            if not plugin:
+                return jsonify({"success": False, "error": "Plugin not found"}), 404
+            data = request.get_json(silent=True) or {}
+            group_id = data.get("group_id", "")
+            if not group_id:
+                return jsonify({"success": False, "error": "缺少 group_id"}), 400
+            values = data.get("values", {})
+            for key, value in values.items():
+                plugin.set_group_config(group_id, key, value)
+            return jsonify({
+                "success": True,
+                "values": plugin.get_group_config_values(group_id),
+            })
+
+        @app.route("/api/plugins/<name>/group-config/reset", methods=["POST"])
+        def api_plugin_group_config_reset(name):
+            plugin = bot.plugin_manager.get(name)
+            if not plugin:
+                return jsonify({"success": False, "error": "Plugin not found"}), 404
+            data = request.get_json(silent=True) or {}
+            group_id = data.get("group_id", "")
+            if not group_id:
+                return jsonify({"success": False, "error": "缺少 group_id"}), 400
+            count = plugin.reset_group_config(group_id)
+            return jsonify({"success": True, "reset": count})
 
         # ── marketplace ────────────────────────────────────────────
 
@@ -1046,11 +1364,79 @@ class QtineApp:
                 ],
             })
 
-        # ── messages ───────────────────────────────────────────────
+        # ── scheduler / tasks ──────────────────────────────────────
 
-        @app.route("/api/messages")
-        def api_messages():
-            return jsonify({"messages": [], "count": 0})
+        @app.route("/api/tasks")
+        def api_tasks():
+            plugin = request.args.get("plugin", type=str) or None
+            tasks = bot.scheduler.list_tasks(plugin=plugin)
+            return jsonify({
+                "success": True,
+                "tasks": tasks,
+                "count": len(tasks),
+            })
+
+        @app.route("/api/tasks", methods=["POST"])
+        def api_task_add():
+            data = request.get_json(silent=True) or {}
+            name = data.get("name", "").strip()
+            cron_expr = data.get("cron", "").strip()
+            plugin = data.get("plugin", "") or ""
+            description = data.get("description", "") or ""
+            action_type = data.get("action_type", "message")
+            action_data = data.get("action_data", {}) or {}
+            if not name or not cron_expr:
+                return jsonify({
+                    "success": False,
+                    "error": "name 和 cron 是必填项",
+                }), 400
+
+            def task_callback():
+                try:
+                    if action_type == "message" and action_data:
+                        target = action_data.get("target", "")
+                        target_type = action_data.get("target_type", "group")
+                        content = action_data.get("content", "")
+                        if target and content:
+                            bot.adapter_manager.send_message(
+                                "onebot_v11", target, content, target_type
+                            )
+                except Exception as e:
+                    self.logger.error(f"Task '{name}' action error: {e}")
+
+            ok = bot.scheduler.add_task(
+                name=name,
+                cron_expr=cron_expr,
+                callback=task_callback,
+                plugin=plugin,
+                description=description,
+            )
+            if ok:
+                return jsonify({"success": True, "name": name})
+            return jsonify({
+                "success": False,
+                "error": "添加任务失败，请检查 cron 表达式",
+            }), 400
+
+        @app.route("/api/tasks/<name>", methods=["DELETE"])
+        def api_task_delete(name):
+            ok = bot.scheduler.remove_task(name)
+            return jsonify({"success": ok, "name": name})
+
+        @app.route("/api/tasks/<name>/run", methods=["POST"])
+        def api_task_run(name):
+            task = None
+            with bot.scheduler._lock:
+                task = bot.scheduler._tasks.get(name)
+            if not task:
+                return jsonify({
+                    "success": False,
+                    "error": "任务不存在",
+                }), 404
+            threading.Thread(target=task.run, daemon=True).start()
+            return jsonify({"success": True, "name": name})
+
+        # ── logs ───────────────────────────────────────────────────
 
         @app.route("/api/logs")
         def api_logs():
@@ -1070,6 +1456,273 @@ class QtineApp:
         def api_logs_clear():
             self.logger.clear_logs()
             return jsonify({"success": True})
+
+        # ── metrics / performance ─────────────────────────────────
+
+        @app.route("/api/metrics")
+        def api_metrics():
+            """Performance and health metrics."""
+            import os
+
+            cpu_percent = 0
+            memory_rss = 0
+            memory_vms = 0
+            memory_mb = 0
+            cpu_count = 0
+            total_memory = 0
+            available_memory = 0
+
+            try:
+                import psutil
+                proc = psutil.Process(os.getpid())
+                try:
+                    cpu_percent = proc.cpu_percent(interval=0.1)
+                except Exception:
+                    cpu_percent = 0
+                mem_info = proc.memory_info()
+                memory_rss = mem_info.rss
+                memory_vms = mem_info.vms
+                memory_mb = round(memory_rss / 1024 / 1024, 2)
+                cpu_count = psutil.cpu_count() or 0
+                total_memory = psutil.virtual_memory().total
+                available_memory = psutil.virtual_memory().available
+            except ImportError:
+                pass
+
+            adapter_stats = []
+            for adapter in bot.adapter_manager.get_all():
+                info = adapter.info
+                adapter_stats.append({
+                    "name": info.name,
+                    "status": info.status.value,
+                    "message_count": info.message_count,
+                    "received_count": info.received_count,
+                    "sent_count": info.sent_count,
+                    "error_count": info.error_count,
+                })
+
+            return jsonify({
+                "success": True,
+                "uptime": bot.uptime,
+                "version": __import__("qtine").__version__,
+                "process": {
+                    "pid": os.getpid(),
+                    "cpu_percent": cpu_percent,
+                    "memory_rss": memory_rss,
+                    "memory_vms": memory_vms,
+                    "memory_mb": memory_mb,
+                },
+                "system": {
+                    "cpu_count": cpu_count,
+                    "total_memory": total_memory,
+                    "available_memory": available_memory,
+                },
+                "plugins": {
+                    "total": bot.plugin_manager.count,
+                    "enabled": bot.plugin_manager.enabled_count,
+                },
+                "adapters": adapter_stats,
+                "tasks": {
+                    "total": len(bot.scheduler._tasks),
+                },
+            })
+
+        # ── webhook ───────────────────────────────────────────────
+
+        @app.route("/api/webhooks")
+        def api_webhooks_list():
+            webhooks = bot.storage.get("webhooks", [])
+            return jsonify({"success": True, "webhooks": webhooks})
+
+        @app.route("/api/webhooks", methods=["POST"])
+        def api_webhook_add():
+            data = request.get_json(silent=True) or {}
+            url = (data.get("url") or "").strip()
+            event = (data.get("event") or "message.received").strip()
+            name = (data.get("name") or "").strip()
+            if not url:
+                return jsonify({
+                    "success": False,
+                    "error": "url 是必填项",
+                }), 400
+            webhooks = bot.storage.get("webhooks", [])
+            webhook = {
+                "id": secrets.token_hex(8),
+                "name": name or url,
+                "url": url,
+                "event": event,
+                "enabled": True,
+                "created_at": time.time(),
+            }
+            webhooks.append(webhook)
+            bot.storage.set("webhooks", webhooks)
+            return jsonify({"success": True, "webhook": webhook})
+
+        @app.route("/api/webhooks/<wh_id>", methods=["DELETE"])
+        def api_webhook_delete(wh_id):
+            webhooks = bot.storage.get("webhooks", [])
+            webhooks = [w for w in webhooks if w.get("id") != wh_id]
+            bot.storage.set("webhooks", webhooks)
+            return jsonify({"success": True})
+
+        @app.route("/api/webhooks/<wh_id>/toggle", methods=["POST"])
+        def api_webhook_toggle(wh_id):
+            webhooks = bot.storage.get("webhooks", [])
+            for w in webhooks:
+                if w.get("id") == wh_id:
+                    w["enabled"] = not w.get("enabled", True)
+                    break
+            bot.storage.set("webhooks", webhooks)
+            return jsonify({"success": True})
+
+        # ── message templates ─────────────────────────────────────
+
+        @app.route("/api/templates")
+        def api_templates_list():
+            templates = bot.storage.get("message_templates", [])
+            return jsonify({"success": True, "templates": templates})
+
+        @app.route("/api/templates", methods=["POST"])
+        def api_template_add():
+            data = request.get_json(silent=True) or {}
+            name = (data.get("name") or "").strip()
+            content = data.get("content", "")
+            if not name or not content:
+                return jsonify({
+                    "success": False,
+                    "error": "name 和 content 是必填项",
+                }), 400
+            templates = bot.storage.get("message_templates", [])
+            template = {
+                "id": secrets.token_hex(8),
+                "name": name,
+                "content": content,
+                "variables": data.get("variables", []) or [],
+                "created_at": time.time(),
+                "updated_at": time.time(),
+            }
+            templates.append(template)
+            bot.storage.set("message_templates", templates)
+            return jsonify({"success": True, "template": template})
+
+        @app.route("/api/templates/<tpl_id>", methods=["PUT"])
+        def api_template_update(tpl_id):
+            data = request.get_json(silent=True) or {}
+            templates = bot.storage.get("message_templates", [])
+            for t in templates:
+                if t.get("id") == tpl_id:
+                    t["name"] = data.get("name", t["name"])
+                    t["content"] = data.get("content", t["content"])
+                    t["variables"] = data.get("variables", t.get("variables", []))
+                    t["updated_at"] = time.time()
+                    break
+            bot.storage.set("message_templates", templates)
+            return jsonify({"success": True})
+
+        @app.route("/api/templates/<tpl_id>", methods=["DELETE"])
+        def api_template_delete(tpl_id):
+            templates = bot.storage.get("message_templates", [])
+            templates = [t for t in templates if t.get("id") != tpl_id]
+            bot.storage.set("message_templates", templates)
+            return jsonify({"success": True})
+
+        @app.route("/api/templates/<tpl_id>/render", methods=["POST"])
+        def api_template_render(tpl_id):
+            data = request.get_json(silent=True) or {}
+            variables = data.get("variables", {}) or {}
+            templates = bot.storage.get("message_templates", [])
+            template = next(
+                (t for t in templates if t.get("id") == tpl_id), None
+            )
+            if not template:
+                return jsonify({
+                    "success": False,
+                    "error": "模板不存在",
+                }), 404
+            content = template["content"]
+            for key, value in variables.items():
+                content = content.replace("{{" + key + "}}", str(value))
+            return jsonify({"success": True, "content": content})
+
+        # ── i18n / locales ────────────────────────────────────────
+
+        @app.route("/api/i18n/locales")
+        def api_i18n_locales():
+            return jsonify({
+                "success": True,
+                "current": bot.storage.get("locale", "zh-CN"),
+                "available": ["zh-CN", "en-US", "ja-JP"],
+            })
+
+        @app.route("/api/i18n/locale", methods=["POST"])
+        def api_i18n_set_locale():
+            data = request.get_json(silent=True) or {}
+            locale = (data.get("locale") or "zh-CN").strip()
+            bot.storage.set("locale", locale)
+            return jsonify({"success": True, "locale": locale})
+
+        @app.route("/api/i18n/strings")
+        def api_i18n_strings():
+            locale = request.args.get("locale",
+                                     bot.storage.get("locale", "zh-CN"))
+            strings = {
+                "zh-CN": {
+                    "app.name": "Qtine 聊天机器人",
+                    "nav.dashboard": "仪表盘",
+                    "nav.plugins": "插件",
+                    "nav.market": "市场",
+                    "nav.adapters": "适配器",
+                    "nav.tasks": "任务",
+                    "nav.messages": "消息",
+                    "nav.logs": "日志",
+                    "nav.settings": "设置",
+                    "nav.about": "关于",
+                    "common.save": "保存",
+                    "common.cancel": "取消",
+                    "common.delete": "删除",
+                    "common.edit": "编辑",
+                    "common.refresh": "刷新",
+                },
+                "en-US": {
+                    "app.name": "Qtine Chat Bot",
+                    "nav.dashboard": "Dashboard",
+                    "nav.plugins": "Plugins",
+                    "nav.market": "Market",
+                    "nav.adapters": "Adapters",
+                    "nav.tasks": "Tasks",
+                    "nav.messages": "Messages",
+                    "nav.logs": "Logs",
+                    "nav.settings": "Settings",
+                    "nav.about": "About",
+                    "common.save": "Save",
+                    "common.cancel": "Cancel",
+                    "common.delete": "Delete",
+                    "common.edit": "Edit",
+                    "common.refresh": "Refresh",
+                },
+                "ja-JP": {
+                    "app.name": "Qtine チャットボット",
+                    "nav.dashboard": "ダッシュボード",
+                    "nav.plugins": "プラグイン",
+                    "nav.market": "マーケット",
+                    "nav.adapters": "アダプター",
+                    "nav.tasks": "タスク",
+                    "nav.messages": "メッセージ",
+                    "nav.logs": "ログ",
+                    "nav.settings": "設定",
+                    "nav.about": "概要",
+                    "common.save": "保存",
+                    "common.cancel": "キャンセル",
+                    "common.delete": "削除",
+                    "common.edit": "編集",
+                    "common.refresh": "更新",
+                },
+            }
+            return jsonify({
+                "success": True,
+                "locale": locale,
+                "strings": strings.get(locale, strings["zh-CN"]),
+            })
 
         # ── WebUI WebSocket ────────────────────────────────────────
 

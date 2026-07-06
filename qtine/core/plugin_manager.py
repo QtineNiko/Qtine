@@ -76,10 +76,17 @@ class PluginManager:
     # ── load from plugins dir (legacy .py + new format) ─────────────
 
     def load_from_dir(self) -> List[str]:
-        """Scan plugins/ directory and load all recognized plugins."""
+        """Scan plugins/ directory and load all recognized plugins.
+
+        Plugins with plugin dependencies (depends_on in data.json) are
+        loaded in dependency order; if a dependency is missing the
+        plugin is skipped with a warning.
+        """
         loaded: List[str] = []
         if not os.path.isdir(self._plugin_dir):
             return loaded
+
+        candidates: List[dict] = []
 
         for item in os.listdir(self._plugin_dir):
             item_path = os.path.join(self._plugin_dir, item)
@@ -87,12 +94,18 @@ class PluginManager:
             # --- Zip plugin ---
             if item.endswith(".zip"):
                 try:
-                    result = self.import_from_zip(item_path)
-                    if result:
-                        loaded.append(result)
+                    meta = self._peek_zip_meta(item_path)
+                    if meta:
+                        candidates.append({
+                            "type": "zip",
+                            "path": item_path,
+                            "meta": meta,
+                            "name": meta.get("name", ""),
+                            "depends": meta.get("depends_on", []) or [],
+                        })
                 except Exception as e:
                     self.logger.error(
-                        f"Failed to load zip plugin [{item}]: {e}"
+                        f"Failed to read zip plugin [{item}]: {e}"
                     )
                 continue
 
@@ -101,40 +114,131 @@ class PluginManager:
                 data_json = os.path.join(item_path, "data.json")
                 if os.path.isfile(data_json):
                     try:
-                        result = self.import_from_dir(item_path)
-                        if result:
-                            loaded.append(result)
+                        with open(data_json, "r", encoding="utf-8") as f:
+                            meta = json.load(f)
+                        candidates.append({
+                            "type": "dir",
+                            "path": item_path,
+                            "meta": meta,
+                            "name": meta.get("name", ""),
+                            "depends": meta.get("depends_on", []) or [],
+                        })
                     except Exception as e:
                         self.logger.error(
-                            f"Failed to load dir plugin [{item}]: {e}"
+                            f"Failed to read dir plugin [{item}]: {e}"
                         )
                     continue
 
                 # Legacy directory with __init__.py
                 init_file = os.path.join(item_path, "__init__.py")
                 if os.path.isfile(init_file):
-                    try:
-                        self._load_legacy_file(init_file, item)
-                        loaded.append(item)
-                    except Exception as e:
-                        self.logger.error(
-                            f"Failed to load legacy plugin [{item}]: {e}"
-                        )
-
+                    candidates.append({
+                        "type": "legacy_dir",
+                        "path": init_file,
+                        "meta": {},
+                        "name": item,
+                        "depends": [],
+                    })
                 continue
 
             # --- Legacy single .py file ---
             if item.endswith(".py") and not item.startswith("_"):
-                try:
-                    name = item[:-3]
-                    self._load_legacy_file(item_path, name)
-                    loaded.append(name)
-                except Exception as e:
-                    self.logger.error(
-                        f"Failed to load plugin [{item}]: {e}"
-                    )
+                name = item[:-3]
+                candidates.append({
+                    "type": "legacy_file",
+                    "path": item_path,
+                    "meta": {},
+                    "name": name,
+                    "depends": [],
+                })
+
+        # Topological sort by depends_on
+        ordered = self._topo_sort(candidates)
+        for cand in ordered:
+            try:
+                if cand["type"] == "zip":
+                    result = self.import_from_zip(cand["path"])
+                elif cand["type"] == "dir":
+                    result = self.import_from_dir(cand["path"])
+                elif cand["type"] == "legacy_dir":
+                    self._load_legacy_file(cand["path"], cand["name"])
+                    result = cand["name"]
+                elif cand["type"] == "legacy_file":
+                    self._load_legacy_file(cand["path"], cand["name"])
+                    result = cand["name"]
+                else:
+                    result = None
+                if result:
+                    loaded.append(result)
+            except Exception as e:
+                self.logger.error(
+                    f"Failed to load plugin [{cand['name']}]: {e}"
+                )
 
         return loaded
+
+    def _peek_zip_meta(self, zip_path: str) -> Optional[dict]:
+        """Read data.json from a zip without extracting."""
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                names = zf.namelist()
+                data_entry = next(
+                    (n for n in names
+                     if n == "data.json" or n.endswith("/data.json")),
+                    None
+                )
+                if not data_entry:
+                    return None
+                return json.loads(zf.read(data_entry).decode("utf-8"))
+        except Exception:
+            return None
+
+    def _topo_sort(self, candidates: List[dict]) -> List[dict]:
+        """Sort plugins so that dependencies come first.
+
+        Plugins with unmet dependencies are dropped with a warning.
+        """
+        name_map = {c["name"]: c for c in candidates if c.get("name")}
+        builtin_names = {p.name for p in self._plugins.values()}
+        result: List[dict] = []
+        visited: set = set()
+        temp: set = set()
+
+        def visit(name: str) -> bool:
+            if name in visited:
+                return True
+            if name in temp:
+                self.logger.warning(
+                    f"Circular plugin dependency detected at: {name}"
+                )
+                return False
+            temp.add(name)
+            cand = name_map.get(name)
+            if cand:
+                for dep in cand.get("depends", []) or []:
+                    # Built-in plugin counts as satisfied
+                    if dep in builtin_names:
+                        continue
+                    if dep not in name_map:
+                        self.logger.warning(
+                            f"Plugin '{name}' requires '{dep}' which "
+                            f"is not available; skipping"
+                        )
+                        temp.discard(name)
+                        return False
+                    if not visit(dep):
+                        temp.discard(name)
+                        return False
+                result.append(cand)
+            temp.discard(name)
+            visited.add(name)
+            return True
+
+        for c in candidates:
+            n = c.get("name")
+            if n and n not in visited:
+                visit(n)
+        return result
 
     # ── zip import (new standard) ───────────────────────────────────
 
