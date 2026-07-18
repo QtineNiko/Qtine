@@ -53,13 +53,13 @@ storage:
   backup_interval_hours: 24
   backup_keep_count: 7
   sqlite_path: ./data/qtine.db
-webui:
-  enabled: true
-  password: qtine123
-  session_secret: change-me-in-production
-  theme: light-day
-  username: admin
 update:
   check_enabled: true
   check_url: https://cdn.jsdelivr.net/gh/QtineNiko/Qtine@main/latest.json
   include_prerelease: false
+webui:
+  enabled: true
+  password: qtine123
+  session_secret: change-me-in-production
+  theme: material-purple
+  username: admin

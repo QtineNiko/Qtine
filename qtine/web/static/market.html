@@ -300,25 +300,8 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     all.textContent='全部 ('+ALL_PLUGINS.length+')';
     all.onclick=function(){ACTIVE_TAGS=[];renderTags();render()};
     box.appendChild(all);
-    // 先展示本地/已安装标签
-    var localTags=['本地','已安装'];
-    localTags.forEach(function(t){
-      if(ALL_TAGS.indexOf(t)<0)return;
-      var b=document.createElement('button');
-      b.className='tag-btn tag-local'+(ACTIVE_TAGS.indexOf(t)>=0?' active':'');
-      b.innerHTML=t+' <span class="count">'+tagCounts[t]+'</span>';
-      b.onclick=function(){toggleTag(t);renderTags();render()};
-      box.appendChild(b);
-    });
-    // 分隔
-    if(ALL_TAGS.some(function(t){return localTags.indexOf(t)<0})){
-      var sep=document.createElement('span');
-      sep.style.cssText='width:1px;height:18px;background:var(--olv);margin:0 4px;display:inline-block';
-      box.appendChild(sep);
-    }
-    // 其他标签
+    // 所有标签
     ALL_TAGS.forEach(function(t){
-      if(localTags.indexOf(t)>=0)return;
       var b=document.createElement('button');
       b.className='tag-btn'+(ACTIVE_TAGS.indexOf(t)>=0?' active':'');
       b.innerHTML=t+' <span class="count">'+tagCounts[t]+'</span>';
