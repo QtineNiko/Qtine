@@ -112,7 +112,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     var gid = getGroup();
     var kw = getKeyword();
     list.innerHTML = '';
-    qtineSkelText('#msg-list',6);
+    list.innerHTML='<div class="empty">加载中...</div>';
     var url = '/api/messages?limit='+pageSize+'&offset='+(page*pageSize);
     if(gid)url += '&group_id='+encodeURIComponent(gid);
     if(kw)url += '&keyword='+encodeURIComponent(kw);

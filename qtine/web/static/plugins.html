@@ -99,9 +99,8 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
   function toast(m){var s=document.getElementById('sb');s.textContent=m;s.classList.add('show');clearTimeout(s._t);s._t=setTimeout(function(){s.classList.remove('show')},3000)}
   function load(){
     var g=document.getElementById('grid');
-    qtineSkel('#grid',6);
+    document.getElementById('grid').innerHTML='<div class="empty">加载中...</div>';
     fetch('/api/plugins').then(function(r){return r.json()}).then(function(d){
-      qtineSkelClear('#grid');
       (d||[]).forEach(function(p){
         var typeText = p.plugin_type==='builtin'?'内置':'外部';
         var statusText = p.enabled?'已启用':'已禁用';

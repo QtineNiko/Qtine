@@ -145,9 +145,8 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
   }
 
   function load(){
-    qtineSkel('#grid',4);
+    document.getElementById('grid').innerHTML='<div class="empty">加载中...</div>';
     fetch('/api/tasks').then(function(r){return r.json()}).then(function(d){
-      qtineSkelClear('#grid');
       var g=document.getElementById('grid');
       var tasks=d.tasks||[];
       if(tasks.length===0){

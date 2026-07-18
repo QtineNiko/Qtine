@@ -60,9 +60,8 @@ td{padding:6px 8px;font-size:13px;border-bottom:1px solid var(--olv)}td:first-ch
   function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
   function toast(m){var s=document.getElementById('sb');s.textContent=m;s.classList.add('show');clearTimeout(s._t);s._t=setTimeout(function(){s.classList.remove('show')},3000)}
   function load(){
-    qtineSkelTable('#grid',3);
+    document.getElementById('grid').innerHTML='<div class="empty">加载中...</div>';
     fetch('/api/adapters').then(function(r){return r.json()}).then(function(d){
-      qtineSkelClear('#grid');
       var g=document.getElementById('grid');
       var statusMap={connected:'已连接',disconnected:'已断开',connecting:'连接中',error:'错误'};
       (d||[]).forEach(function(a){

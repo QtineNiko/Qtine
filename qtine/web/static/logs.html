@@ -59,9 +59,7 @@ select{padding:8px 12px;background:var(--sf);color:var(--on-s);border:1px solid 
   function load(){
     var lvl=document.getElementById('lvl').value;
     var log=document.getElementById('log');
-    log.innerHTML='';
-    qtineSkelBlock('#log','100%');
-    var skelNode=log.firstChild;
+    log.innerHTML='<div style="color:var(--on-sv);padding:40px;text-align:center">加载中...</div>';
     fetch('/api/logs?level='+lvl+'&lines=300').then(function(r){return r.json()}).then(function(d){
       var entries=d.entries||[];
       if(!entries.length){log.innerHTML='<div class="log-line" style="color:var(--on-sv)">暂无日志。</div>';return}
