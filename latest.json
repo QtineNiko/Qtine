@@ -1,0 +1,12 @@
+{
+  "has_update": true,
+  "latest": {
+    "tag_name": "v1.1.0",
+    "name": "v1.1.0",
+    "body": "初始版本",
+    "published_at": "2026-07-01",
+    "prerelease": false,
+    "html_url": "https://github.com/QtineNiko/Qtine/releases",
+    "assets": []
+  }
+}
