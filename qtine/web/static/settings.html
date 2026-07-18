@@ -22,12 +22,7 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
 .copy-btn:hover{background:rgba(208,188,255,.08)}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--olv);border-radius:3px}
 @media(max-width:768px){.nav{width:56px}.nav-item{width:48px;padding:8px 1px;font-size:10px}.main{padding:12px}}
-</style>
-<link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css">
-<link rel="stylesheet" href="/static/css/qtine-motion.css">
-<script src="https://unpkg.com/mdui@2/mdui.global.js"></script>
-<script src="/static/js/qtine-motion.js" defer></script>
-</head><body>
+</style><script src="/static/theme.js"></script></head><body>
 <header class="top-bar">
   <div style="display:flex;align-items:center;flex:1">
     <svg width="26" height="26" viewBox="0 0 24 24" fill="var(--p)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
@@ -53,14 +48,16 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
       <h3>管理令牌</h3>
       <p style="font-size:13px;color:var(--on-sv);margin-bottom:8px">用于登录 WebUI 和调用 API。令牌存储在 <code style="color:var(--p)">data/token.txt</code>。</p>
       <div class="token-box">
-        <code id="token"><span class="skel skel-line w80" style="display:inline-block;height:14px"></span></code>
+        <code id="token">加载中...</code>
         <button class="copy-btn" onclick="copyToken()">复制</button>
         <button class="copy-btn" onclick="toggleToken()">显示/隐藏</button>
       </div>
     </div>
     <div class="card"><h3>全局管理员</h3><p style="font-size:13px;color:var(--on-sv);margin-bottom:8px">配置超级管理员QQ号，多个以逗号或换行分隔。管理员可使用 <code style="color:var(--p)">qtine</code> 系列命令。</p><textarea id="admins-ta" style="width:100%;height:100px;background:var(--sfc);color:var(--on-s);border:1px solid var(--ol);border-radius:var(--rad-s);padding:10px;font-family:inherit;font-size:13px;resize:vertical;margin-bottom:8px" placeholder="例如：123456789, 987654321"></textarea><div style="display:flex;gap:8px"><button class="btn" onclick="saveAdmins()">保存</button><span id="admins-msg" style="font-size:13px;color:var(--on-sv);align-self:center"></span></div></div>
+    <div class="card"><h3>主题定制</h3><p style="font-size:13px;color:var(--on-sv);margin-bottom:12px">选择 WebUI 界面主题，切换后立即生效并持久化。</p><div id="theme-builtin" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div><div id="theme-imported-wrap" style="display:none;margin-bottom:16px"><p style="font-size:12px;color:var(--on-sv);margin-bottom:6px">已导入主题</p><div id="theme-imported" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px"></div></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="file" id="theme-file-input" accept=".zip,.qttheme" style="display:none" onchange="importTheme(this)"><button class="btn" onclick="document.getElementById('theme-file-input').click()">导入主题包</button><span style="font-size:12px;color:var(--on-sv)">支持 .qttheme / .zip 格式</span><span id="theme-msg" style="font-size:13px;color:var(--on-sv);margin-left:auto"></span></div></div>
     <div class="card"><h3>服务器</h3><table id="srv-tbl"><tr><td>版本</td><td id="ver">--</td></tr><tr><td>设备</td><td id="dev">--</td></tr><tr><td>运行状态</td><td id="stat">--</td></tr><tr><td>运行时长</td><td id="up">--</td></tr></table></div>
     <div class="card"><h3>存储</h3><table><tr><td>后端</td><td>SQLite</td></tr><tr><td>路径</td><td>./data/qtine.db</td></tr></table></div>
+    <div class="card"><h3>系统更新</h3><p style="font-size:13px;color:var(--on-sv);margin-bottom:8px">Qtine 核心版本更新，通过 GitHub Releases 获取，支持镜像加速。</p><table><tr><td>当前版本</td><td id="up-cur">--</td></tr><tr><td>最新版本</td><td id="up-latest">检查中...</td></tr><tr><td>状态</td><td id="up-status">--</td></tr></table><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><button class="btn" onclick="updateCheck()">检查更新</button><button class="btn" id="up-latest-btn" onclick="updateDownload('')" disabled>更新到最新</button><button class="btn" id="up-rollback-btn" onclick="showBackups()" disabled>回滚</button></div><div style="margin-top:10px"><span style="font-size:12px;color:var(--on-sv)">下载镜像源：</span><select id="up-mirror" style="padding:6px 12px;border-radius:var(--rad-f);border:1px solid var(--ol);background:var(--sfc);color:var(--on-s);font-size:13px;margin-left:6px"><option value="">官方源 (GitHub)</option></select><span id="mirror-test-btn" style="display:none;margin-left:8px;font-size:12px;color:var(--p);cursor:pointer" onclick="testMirrors()">测速</span></div><div style="margin-top:10px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:var(--on-sv);white-space:nowrap">更新检查代理：</span><input type="text" id="up-check-url" placeholder="留空则直连 GitHub API" style="flex:1;padding:6px 12px;border-radius:var(--rad-f);border:1px solid var(--ol);background:var(--sfc);color:var(--on-s);font-size:13px;outline:none"><button class="btn" onclick="saveCheckUrl()" style="padding:6px 14px;font-size:13px">保存</button></div><p style="font-size:11px;color:var(--ol);margin-top:4px">使用 jsDelivr CDN 获取 latest.json（国内可访问）：https://cdn.jsdelivr.net/gh/QtineNiko/Qtine@main/latest.json — 清空则回退直连 GitHub API。</p><div id="up-changelog" style="margin-top:12px;background:var(--sfc);border:1px solid var(--ol);border-radius:var(--rad-s);padding:12px;max-height:200px;overflow-y:auto;font-size:13px;line-height:1.6;display:none;white-space:pre-wrap"></div><div id="up-backups" style="margin-top:12px;display:none"></div><span id="up-msg" style="font-size:13px;color:var(--on-sv)"></span></div>
     <div class="card"><h3>危险操作</h3><p style="font-size:13px;color:var(--on-sv);margin-bottom:12px">以下操作将影响正在运行的机器人进程。</p><div style="display:flex;gap:8px"><button class="btn danger" onclick="shutdown()">关闭机器人</button><button class="btn danger" onclick="restart()">重启机器人</button></div></div>
   </main>
 </div>
@@ -120,6 +117,282 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
       else{msg.textContent='保存失败：'+(d&&d.error?d.error:'未知错误')}
     });
   };
+  // ── 主题定制 ──────────────────────────────────────────────
+  var CURRENT_THEME='';
+  function loadThemes(){
+    fetch('/api/themes').then(function(r){return r.json()}).then(function(d){
+      if(!d)return;
+      CURRENT_THEME=d.current||'';
+      renderThemes(d.builtin||[],d.imported||[]);
+    });
+  }
+  function renderThemes(builtin,imported){
+    var box=document.getElementById('theme-builtin');
+    box.innerHTML='';
+    builtin.forEach(function(t){
+      box.appendChild(makeThemeCard(t,true));
+    });
+    var impWrap=document.getElementById('theme-imported-wrap');
+    var impBox=document.getElementById('theme-imported');
+    impBox.innerHTML='';
+    if(imported.length>0){
+      impWrap.style.display='';
+      imported.forEach(function(t){
+        impBox.appendChild(makeThemeCard(t,false));
+      });
+    }else{
+      impWrap.style.display='none';
+    }
+  }
+  function makeThemeCard(t,builtin){
+    var active=t.name===CURRENT_THEME;
+    var card=document.createElement('div');
+    card.style.cssText='background:' + (active ? 'var(--pc)' : 'var(--sfc)') + ';border:2px solid ' + (active ? 'var(--p)' : 'var(--olv)') + ';border-radius:var(--rad-m);padding:12px;cursor:pointer;transition:all var(--tr);position:relative';
+    var pColor=t.variables&&t.variables['--p']?t.variables['--p']:'#D0BCFF';
+    var bgColor=t.variables&&t.variables['--bg']?t.variables['--bg']:'#141218';
+    var sfColor=t.variables&&t.variables['--sf']?t.variables['--sf']:'#211F26';
+    card.innerHTML=
+      '<div style="height:48px;border-radius:var(--rad-s);margin-bottom:8px;background:'+bgColor+';border:1px solid var(--olv);position:relative;overflow:hidden">'+
+        '<div style="position:absolute;top:0;left:0;width:50%;height:100%;background:'+sfColor+'"></div>'+
+        '<div style="position:absolute;top:8px;left:8px;width:20px;height:20px;border-radius:50%;background:'+pColor+'"></div>'+
+      '</div>'+
+      '<div style="font:500 13px/18px Roboto,sans-serif;color:var(--on-s)">'+(t.display_name||t.name)+'</div>'+
+      '<div style="font-size:11px;color:var(--on-sv);margin-top:2px">'+(t.mode==='light'?'亮色':'暗色')+' · '+(t.author||'')+'</div>'+
+      (active?'<div style="font-size:11px;color:var(--p);margin-top:4px;font-weight:500">✓ 当前</div>':'')+
+      (!builtin?'<button class="btn danger" style="position:absolute;top:8px;right:8px;padding:2px 8px;font-size:11px" data-del="'+t.name+'">删除</button>':'');
+    card.onclick=function(e){
+      if(e.target.dataset&&e.target.dataset.del){return}
+      switchTheme(t.name);
+    };
+    // 删除按钮事件
+    var delBtn=card.querySelector('[data-del]');
+    if(delBtn){
+      delBtn.onclick=function(e){
+        e.stopPropagation();
+        deleteTheme(delBtn.dataset.del);
+      };
+    }
+    return card;
+  }
+  function switchTheme(name){
+    fetch('/api/themes/current',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})}).then(function(r){return r.json()}).then(function(d){
+      var msg=document.getElementById('theme-msg');
+      if(d&&d.success){
+        CURRENT_THEME=name;
+        if(window.QtineTheme&&d.variables){QtineTheme.apply(d.variables, d.mode||'dark', name)}
+        msg.textContent='已切换';
+        msg.style.color='var(--su)';
+        setTimeout(function(){msg.textContent=''},2000);
+        loadThemes();
+      }else{
+        msg.textContent='切换失败：'+(d&&d.error?d.error:'未知错误');
+        msg.style.color='var(--e)';
+      }
+    });
+  }
+  function deleteTheme(name){
+    if(!confirm('确定要删除主题 "'+name+'" 吗？'))return;
+    fetch('/api/themes/'+encodeURIComponent(name),{method:'DELETE'}).then(function(r){return r.json()}).then(function(d){
+      var msg=document.getElementById('theme-msg');
+      if(d&&d.success){
+        msg.textContent='已删除';
+        msg.style.color='var(--su)';
+        setTimeout(function(){msg.textContent=''},2000);
+        loadThemes();
+      }else{
+        msg.textContent='删除失败：'+(d&&d.error?d.error:'未知错误');
+        msg.style.color='var(--e)';
+      }
+    });
+  }
+  window.importTheme=function(input){
+    var f=input.files[0];if(!f)return;
+    var fd=new FormData();fd.append('file',f);
+    var msg=document.getElementById('theme-msg');
+    msg.textContent='正在导入 '+f.name+' ...';
+    msg.style.color='var(--on-sv)';
+    fetch('/api/themes/import',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.success){
+        msg.textContent='主题 '+d.name+' 导入成功';
+        msg.style.color='var(--su)';
+        loadThemes();
+      }else{
+        msg.textContent='导入失败：'+(d&&d.error?d.error:'未知错误');
+        msg.style.color='var(--e)';
+      }
+    }).catch(function(){
+      msg.textContent='导入失败';
+      msg.style.color='var(--e)';
+    });
+    input.value='';
+  };
+  loadThemes();
   loadToken();loadStatus();loadAdmins();setInterval(loadStatus,5000);
+
+  // ── 系统更新 ──────────────────────────────────────────────
+  var UP_LATEST_TAG='';
+  function updateCheck(silent){
+    var msg=document.getElementById('up-msg');
+    if(!silent){msg.textContent='正在检查...';msg.style.color='var(--on-sv)'}
+    fetch('/api/update/check').then(function(r){return r.json()}).then(function(d){
+      if(!d)return;
+      document.getElementById('up-cur').textContent=d.current||'--';
+      if(d.has_update&&d.latest){
+        UP_LATEST_TAG=d.latest.tag_name;
+        document.getElementById('up-latest').textContent=d.latest.tag_name;
+        document.getElementById('up-status').innerHTML='<span style="color:var(--su);font-weight:500">有可用更新</span>';
+        document.getElementById('up-latest-btn').disabled=false;
+        document.getElementById('up-latest-btn').textContent='更新到 '+d.latest.tag_name;
+        var cl=document.getElementById('up-changelog');
+        cl.style.display='';cl.textContent=d.latest.body||'（无更新日志）';
+      }else{
+        UP_LATEST_TAG='';
+        document.getElementById('up-latest').textContent=d.current||'--';
+        document.getElementById('up-status').innerHTML='<span style="color:var(--su)">已是最新</span>';
+        document.getElementById('up-latest-btn').disabled=true;
+        document.getElementById('up-latest-btn').textContent='更新到最新';
+        document.getElementById('up-changelog').style.display='none';
+      }
+      if(!silent){msg.textContent='';msg.style.color='var(--on-sv)'}
+    }).catch(function(){
+      document.getElementById('up-status').textContent='检查失败';
+      if(!silent){msg.textContent='检查失败';msg.style.color='var(--e)'}
+    });
+  }
+  function updateDownload(tag){
+    var v=tag||UP_LATEST_TAG;
+    if(!v){toast('请先检查更新');return}
+    if(!confirm('确定要更新到 '+v+' 吗？更新完成后需重启。'))return;
+    var mirror=document.getElementById('up-mirror').value;
+    var msg=document.getElementById('up-msg');
+    msg.textContent='正在下载并安装 '+v+' ...';msg.style.color='var(--on-sv)';
+    document.getElementById('up-latest-btn').disabled=true;
+    fetch('/api/update/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:v,mirror:mirror||undefined})}).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.success){
+        msg.textContent=d.message||'更新完成';msg.style.color='var(--su)';
+        loadBackupStatus();
+        updateCheck(true);
+      }else{
+        msg.textContent='更新失败: '+(d&&d.error?d.error:'未知错误');
+        msg.style.color='var(--e)';
+        document.getElementById('up-latest-btn').disabled=false;
+      }
+    }).catch(function(){
+      msg.textContent='更新失败';msg.style.color='var(--e)';
+      document.getElementById('up-latest-btn').disabled=false;
+    });
+  }
+  function showBackups(){
+    fetch('/api/update/backups').then(function(r){return r.json()}).then(function(d){
+      var box=document.getElementById('up-backups');
+      var backups=d.backups||[];
+      if(backups.length===0){box.innerHTML='<p style="font-size:12px;color:var(--on-sv)">暂无备份</p>';box.style.display='';return}
+      var html='<p style="font-size:12px;color:var(--on-sv);margin-bottom:6px">备份记录（点击恢复）</p>';
+      backups.forEach(function(b){
+        html+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px"><span>'+b.version+'</span><span style="color:var(--on-sv);font-size:12px">'+b.created_at+'</span><button class="btn" style="padding:2px 10px;font-size:12px" onclick="rollbackTo(\''+b.version+'\')">恢复</button></div>';
+      });
+      box.innerHTML=html;box.style.display='';
+    });
+  }
+  function rollbackTo(ver){
+    if(!confirm('确定要回滚到 '+ver+' 吗？回滚后请重启。'))return;
+    var msg=document.getElementById('up-msg');
+    msg.textContent='正在回滚到 '+ver+' ...';msg.style.color='var(--on-sv)';
+    fetch('/api/update/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:ver})}).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.success){
+        msg.textContent=d.message||'回滚完成';msg.style.color='var(--su)';
+        updateCheck(true);
+      }else{
+        msg.textContent='回滚失败: '+(d&&d.error?d.error:'未知错误');
+        msg.style.color='var(--e)';
+      }
+    });
+  }
+  function loadBackupStatus(){
+    fetch('/api/update/backups').then(function(r){return r.json()}).then(function(d){
+      var btn=document.getElementById('up-rollback-btn');
+      btn.disabled=(d.backups||[]).length===0;
+    });
+  }
+  function toast(m){alert(m)}
+  function loadMirrors(){
+    fetch('/api/update/mirrors').then(function(r){return r.json()}).then(function(d){
+      var sel=document.getElementById('up-mirror');
+      // 保留首选项（官方源为默认），清空其余
+      sel.innerHTML='<option value="">官方源 (GitHub)</option>';
+      (d.mirrors||[]).forEach(function(m){
+        var name=(typeof m==='string')?m.replace('https://','').split('/')[0]:m.name;
+        var url=(typeof m==='string')?m:(m.url||'');
+        // 跳过官方源（已经作为默认）
+        if(m.is_official||url==='https://github.com')return;
+        sel.innerHTML+='<option value="'+url+'">'+name+'</option>';
+      });
+      // 显示测速按钮
+      if(d.mirrors&&d.mirrors.length>1){
+        document.getElementById('mirror-test-btn').style.display='';
+      }
+    }).catch(function(e){console.error('Load mirrors failed:',e)});
+  }
+  // 测速功能
+  window.testMirrors=function(){
+    var mirrors=Array.from(document.getElementById('up-mirror').options).slice(1);
+    var msg=document.getElementById('up-msg');
+    if(mirrors.length===0){msg.textContent='没有可测速的镜像源';msg.style.color='var(--w)';return}
+    msg.textContent='正在测速...';msg.style.color='var(--on-sv)';
+    var remaining=mirrors.length;
+    var best=null;
+    var bestTime=Infinity;
+    mirrors.forEach(function(opt){
+      var url=opt.value.replace(/\/$/,'')+'/QtineNiko/Qtine';
+      var start=Date.now();
+      fetch(url,{method:'HEAD',mode:'no-cors'}).then(function(){
+        var t=Date.now()-start;
+        if(t<bestTime){bestTime=t;best=opt}
+      }).catch(function(){}).finally(function(){
+        remaining--;
+        if(remaining===0){
+          if(best){
+            document.getElementById('up-mirror').value=best.value;
+            msg.textContent='最快镜像：'+best.text+' ('+bestTime+'ms)，已自动选择';
+            msg.style.color='var(--su)';
+          }else{
+            msg.textContent='测速完成，所有镜像均不可达';
+            msg.style.color='var(--w)';
+          }
+        }
+      });
+    });
+  };
+  loadMirrors();
+  updateCheck(true);
+  loadBackupStatus();
+  loadCheckUrl();
+
+  // ── 更新检查代理 URL ──────────────────────────────────────
+  function loadCheckUrl(){
+    fetch('/api/update/check-url').then(function(r){return r.json()}).then(function(d){
+      var input=document.getElementById('up-check-url');
+      if(d.url){
+        input.value=d.url;
+      }else{
+        // 默认 jsDelivr CDN
+        input.value='https://cdn.jsdelivr.net/gh/QtineNiko/Qtine@main/latest.json';
+      }
+    }).catch(function(){
+      // API 不可用时仍然填入默认值
+      document.getElementById('up-check-url').value='https://cdn.jsdelivr.net/gh/QtineNiko/Qtine@main/latest.json';
+    });
+  }
+  window.saveCheckUrl=function(){
+    var url=document.getElementById('up-check-url').value.trim();
+    fetch('/api/update/check-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})}).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.success){
+        toast('更新检查 URL 已保存');
+        updateCheck(true);
+      }else{
+        toast('保存失败: '+(d&&d.error?d.error:'未知错误'));
+      }
+    }).catch(function(){toast('保存失败')});
+  };
 })();
 </script></body></html>

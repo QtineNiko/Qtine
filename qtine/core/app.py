@@ -7,6 +7,9 @@ import secrets
 import sys
 import time
 import threading
+import json
+import shutil
+import zipfile
 from typing import Optional, Dict
 
 from flask import Flask, request, jsonify, send_from_directory, redirect, abort, Response
@@ -25,6 +28,19 @@ from qtine.core.session import SessionManager
 from qtine.core.plugin_manager import PluginManager
 from qtine.core.adapter_manager import AdapterManager
 from qtine.core.scheduler import TaskScheduler
+from qtine.core.updater import (
+    find_update,
+    find_release_by_tag,
+    fetch_releases,
+    download_release,
+    backup_current,
+    install_release,
+    rollback_to,
+    list_backups,
+    get_current_version,
+    compare_versions,
+    DEFAULT_MIRRORS,
+)
 from qtine.utils.models import Message, Sender, AdapterStatus
 from qtine.utils.logger import QtineLogger, get_logger
 from qtine.storage.backend import Storage
@@ -33,6 +49,14 @@ from qtine.storage.backend import Storage
 UPLOAD_DIR = os.path.join("data", "uploads")
 MAX_UPLOAD_MB = 50
 ALLOWED_EXTENSIONS = {"zip"}
+
+# 主题相关路径
+THEMES_DIR = os.path.join("data", "themes")
+BUILTIN_THEMES_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "web", "static", "builtin-themes.json",
+)
+DEFAULT_THEME = "material-purple"
 
 # 默认 GitHub 加速镜像（10 个）
 DEFAULT_GITHUB_MIRRORS = [
@@ -562,6 +586,7 @@ class QtineApp:
 
         self._init_token()
         os.makedirs(UPLOAD_DIR, exist_ok=True)
+        os.makedirs(THEMES_DIR, exist_ok=True)
 
         self.socketio = SocketIO(
             self.flask_app,
@@ -921,6 +946,428 @@ class QtineApp:
             self.config.save()
             return jsonify({"success": True, "admins": admins})
 
+        # ── themes ─────────────────────────────────────────────────
+
+        def _load_builtin_themes() -> list:
+            """加载内置主题列表。"""
+            try:
+                with open(BUILTIN_THEMES_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return data.get("themes", [])
+            except Exception as e:
+                self.logger.warning(f"Failed to load builtin themes: {e}")
+                return []
+
+        def _load_imported_themes() -> list:
+            """加载已导入的主题列表（从 data/themes/ 目录）。"""
+            themes = []
+            if not os.path.isdir(THEMES_DIR):
+                return themes
+            for name in os.listdir(THEMES_DIR):
+                theme_file = os.path.join(THEMES_DIR, name, "theme.json")
+                if not os.path.isfile(theme_file):
+                    continue
+                try:
+                    with open(theme_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    data["builtin"] = False
+                    data["name"] = data.get("name", name)
+                    themes.append(data)
+                except Exception as e:
+                    self.logger.warning(
+                        f"Failed to load imported theme {name}: {e}"
+                    )
+            return themes
+
+        def _find_theme(name: str) -> Optional[dict]:
+            """查找指定名称的主题（内置 + 已导入）。"""
+            for t in _load_builtin_themes():
+                if t.get("name") == name:
+                    return t
+            for t in _load_imported_themes():
+                if t.get("name") == name:
+                    return t
+            return None
+
+        @app.route("/api/themes")
+        def api_themes_list():
+            """列出所有可用主题。"""
+            builtin = _load_builtin_themes()
+            imported = _load_imported_themes()
+            current = (
+                self.config.get("webui.theme", DEFAULT_THEME) or DEFAULT_THEME
+            )
+            return jsonify({
+                "current": current,
+                "builtin": builtin,
+                "imported": imported,
+                "total": len(builtin) + len(imported),
+            })
+
+        @app.route("/api/themes/current")
+        def api_themes_current():
+            """获取当前主题（含变量定义）。"""
+            name = (
+                self.config.get("webui.theme", DEFAULT_THEME) or DEFAULT_THEME
+            )
+            theme = _find_theme(name)
+            if not theme:
+                theme = _find_theme(DEFAULT_THEME)
+            if not theme:
+                return jsonify({
+                    "name": DEFAULT_THEME,
+                    "variables": {},
+                })
+            return jsonify({
+                "name": theme.get("name", DEFAULT_THEME),
+                "display_name": theme.get("display_name", ""),
+                "mode": theme.get("mode", "dark"),
+                "variables": theme.get("variables", {}),
+            })
+
+        @app.route("/api/themes/current", methods=["POST"])
+        def api_themes_set_current():
+            """切换当前主题。"""
+            token = request.cookies.get("qtine_token", "")
+            if token != self._admin_token:
+                return jsonify({"error": "Unauthorized"}), 401
+            data = request.get_json(silent=True) or {}
+            name = (data.get("name") or "").strip()
+            if not name:
+                return jsonify({"error": "name is required"}), 400
+            theme = _find_theme(name)
+            if not theme:
+                return jsonify({"error": "Theme not found"}), 404
+            self.config.set("webui.theme", name)
+            self.config.save()
+            self.logger.info(f"Theme switched to: {name}")
+            return jsonify({
+                "success": True,
+                "name": name,
+                "mode": theme.get("mode", "dark"),
+                "variables": theme.get("variables", {}),
+            })
+
+        @app.route("/api/themes/import", methods=["POST"])
+        def api_themes_import():
+            """导入主题包（.qttheme 或 .zip）。
+
+            主题包格式：zip，包含 theme.json（必需）和 preview.png（可选）。
+            """
+            token = request.cookies.get("qtine_token", "")
+            if token != self._admin_token:
+                return jsonify({"error": "Unauthorized"}), 401
+            if "file" not in request.files:
+                return jsonify({"error": "No file provided"}), 400
+            f = request.files["file"]
+            if f.filename == "":
+                return jsonify({"error": "Empty filename"}), 400
+            filename = (f.filename or "").lower()
+            if not (filename.endswith(".zip") or filename.endswith(".qttheme")):
+                return jsonify({"error": "Only .zip or .qttheme allowed"}), 400
+
+            # 保存到临时文件
+            tmp_dir = os.path.join(THEMES_DIR, "_tmp_import")
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            os.makedirs(tmp_dir, exist_ok=True)
+            tmp_zip = os.path.join(tmp_dir, "theme.zip")
+            f.save(tmp_zip)
+
+            try:
+                with zipfile.ZipFile(tmp_zip, "r") as zf:
+                    names = zf.namelist()
+                    # 查找 theme.json（可能在根目录或子目录）
+                    theme_entry = next(
+                        (n for n in names
+                         if n == "theme.json" or n.endswith("/theme.json")),
+                        None,
+                    )
+                    if not theme_entry:
+                        return jsonify(
+                            {"error": "theme.json not found in package"}
+                        ), 400
+
+                    meta = json.loads(zf.read(theme_entry).decode("utf-8"))
+                    theme_name = meta.get("name", "").strip()
+                    if not theme_name:
+                        return jsonify(
+                            {"error": "theme.json missing 'name'"}
+                        ), 400
+                    if not meta.get("variables"):
+                        return jsonify(
+                            {"error": "theme.json missing 'variables'"}
+                        ), 400
+
+                    # 内置主题名称冲突检查
+                    builtin_names = {
+                        t.get("name") for t in _load_builtin_themes()
+                    }
+                    if theme_name in builtin_names:
+                        return jsonify(
+                            {"error": f"Theme '{theme_name}' is builtin, cannot override"}
+                        ), 400
+
+                    # 解压到 data/themes/<name>/
+                    dest = os.path.join(THEMES_DIR, theme_name)
+                    if os.path.exists(dest):
+                        shutil.rmtree(dest, ignore_errors=True)
+                    os.makedirs(dest, exist_ok=True)
+                    zf.extractall(dest)
+
+                    self.logger.info(f"Theme imported: {theme_name}")
+                    return jsonify({
+                        "success": True,
+                        "name": theme_name,
+                        "display_name": meta.get("display_name", theme_name),
+                    })
+            except zipfile.BadZipFile:
+                return jsonify({"error": "Invalid zip file"}), 400
+            except Exception as e:
+                return jsonify({"error": str(e)}), 400
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        @app.route("/api/themes/<name>", methods=["DELETE"])
+        def api_themes_delete(name: str):
+            """删除已导入的主题。"""
+            token = request.cookies.get("qtine_token", "")
+            if token != self._admin_token:
+                return jsonify({"error": "Unauthorized"}), 401
+            # 不允许删除内置主题
+            builtin_names = {t.get("name") for t in _load_builtin_themes()}
+            if name in builtin_names:
+                return jsonify({"error": "Cannot delete builtin theme"}), 400
+
+            theme_dir = os.path.join(THEMES_DIR, name)
+            if not os.path.isdir(theme_dir):
+                return jsonify({"error": "Theme not found"}), 404
+
+            shutil.rmtree(theme_dir, ignore_errors=True)
+
+            # 如果删除的是当前主题，回退到默认
+            current = self.config.get("webui.theme", DEFAULT_THEME)
+            if current == name:
+                self.config.set("webui.theme", DEFAULT_THEME)
+                self.config.save()
+
+            self.logger.info(f"Theme deleted: {name}")
+            return jsonify({"success": True, "name": name})
+
+        # ── update ─────────────────────────────────────────────────
+
+        def _check_auth_json():
+            token = request.cookies.get("qtine_token", "")
+            if token != self._admin_token:
+                return jsonify({"error": "Unauthorized"}), 401
+            return None
+
+        @app.route("/api/update/check")
+        def api_update_check():
+            """检查是否有更新（优先使用自建服务器代理）。"""
+            import threading
+
+            result = {"has_update": False, "current": "", "latest": None}
+
+            def _do_check():
+                current = get_current_version()
+                check_url = (
+                    self.config.get("update.check_url", "")
+                    or ""
+                ).strip()
+                # 默认使用 jsDelivr CDN
+                if not check_url:
+                    check_url = "https://cdn.jsdelivr.net/gh/QtineNiko/Qtine@main/latest.json"
+                result["current"] = current
+                release = find_update(
+                    current, check_url=check_url or None
+                )
+                if release:
+                    result["has_update"] = True
+                    result["latest"] = {
+                        "tag_name": release.tag_name,
+                        "name": release.name,
+                        "body": release.body,
+                        "published_at": release.published_at,
+                        "prerelease": release.prerelease,
+                        "html_url": release.html_url,
+                    }
+
+            # 用线程避免阻塞请求
+            t = threading.Thread(target=_do_check, daemon=True)
+            t.start()
+            t.join(timeout=15)
+
+            return jsonify(result)
+
+        @app.route("/api/update/versions")
+        def api_update_versions():
+            """获取所有可用版本列表。"""
+            import threading
+
+            result = {"current": "", "versions": []}
+
+            def _do_fetch():
+                releases = fetch_releases()
+                current = get_current_version()
+                result["current"] = current
+                result["versions"] = [
+                    {
+                        "tag_name": r.tag_name,
+                        "name": r.name,
+                        "body": r.body,
+                        "published_at": r.published_at,
+                        "prerelease": r.prerelease,
+                        "html_url": r.html_url,
+                        "is_current": compare_versions(r.tag_name, current) == 0,
+                        "is_newer": compare_versions(r.tag_name, current) > 0,
+                    }
+                    for r in releases
+                ]
+
+            t = threading.Thread(target=_do_fetch, daemon=True)
+            t.start()
+            t.join(timeout=20)
+
+            return jsonify(result)
+
+        @app.route("/api/update/download", methods=["POST"])
+        def api_update_download():
+            """下载并安装指定版本。
+
+            Body: {"tag": "v1.2.0", "mirror": "https://gh.llkk.cc"} (mirror 可选)
+            """
+            auth_err = _check_auth_json()
+            if auth_err:
+                return auth_err
+            data = request.get_json(silent=True) or {}
+            tag = (data.get("tag") or "").strip()
+            if not tag:
+                return jsonify({"error": "tag is required"}), 400
+
+            mirror = (data.get("mirror") or "").strip() or None
+
+            current = get_current_version()
+            if compare_versions(tag, current) == 0:
+                return jsonify({
+                    "success": False,
+                    "error": f"Already on version {tag}",
+                })
+
+            release = find_release_by_tag(tag)
+            if not release:
+                return jsonify({
+                    "success": False,
+                    "error": f"Release {tag} not found",
+                }), 404
+
+            # 下载
+            zip_path = download_release(release, mirror)
+            if not zip_path:
+                return jsonify({
+                    "success": False,
+                    "error": "Download failed",
+                }), 500
+
+            # 备份
+            backup_current(PROJECT_ROOT, current)
+
+            # 安装
+            ok = install_release(
+                zip_path, PROJECT_ROOT,
+                old_version=current,
+                new_version=release.tag_name,
+            )
+
+            if ok:
+                self.logger.info(
+                    f"Update completed: {current} → {release.tag_name}"
+                )
+                return jsonify({
+                    "success": True,
+                    "from": current,
+                    "to": release.tag_name,
+                    "message": "更新完成，请重启 Qtine 使新版本生效",
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": "Install failed, restored from backup",
+                }), 500
+
+        @app.route("/api/update/backups")
+        def api_update_backups():
+            """列出所有备份。"""
+            return jsonify({
+                "backups": list_backups(),
+            })
+
+        @app.route("/api/update/rollback", methods=["POST"])
+        def api_update_rollback():
+            """回滚到指定备份版本。"""
+            auth_err = _check_auth_json()
+            if auth_err:
+                return auth_err
+            data = request.get_json(silent=True) or {}
+            version = (data.get("version") or "").strip()
+            if not version:
+                return jsonify({"error": "version is required"}), 400
+
+            ok = rollback_to(PROJECT_ROOT, version)
+            if ok:
+                self.logger.info(f"Rollback to {version} completed")
+                return jsonify({
+                    "success": True,
+                    "version": version,
+                    "message": f"已回滚到 {version}，请重启 Qtine",
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": f"回滚到 {version} 失败",
+                }), 500
+
+        @app.route("/api/update/mirrors")
+        def api_update_mirrors():
+            """返回可用加速镜像列表，包含官方源和加速镜像。"""
+            return jsonify({
+                "mirrors": [
+                    {"name": "官方源 (GitHub)", "url": "https://github.com", "is_official": True},
+                    {"name": "ghproxy", "url": "https://ghproxy.com"},
+                    {"name": "99988866", "url": "https://gh.api.99988866.xyz"},
+                    {"name": "mirror.ghproxy", "url": "https://mirror.ghproxy.com"},
+                    {"name": "gh-proxy", "url": "https://gh-proxy.com"},
+                    {"name": "xcxgw", "url": "https://gh.xcxgw.com"},
+                    {"name": "ghps", "url": "https://ghps.cc"},
+                    {"name": "d-ai workers", "url": "https://gh.d-ai.workers.dev"},
+                    {"name": "llkk", "url": "https://gh.llkk.cc"},
+                    {"name": "hub.gitmirror", "url": "https://hub.gitmirror.com"},
+                ],
+            })
+
+        @app.route("/api/update/check-url")
+        def api_update_check_url():
+            """返回当前配置的更新检查代理 URL。"""
+            return jsonify({
+                "url": self.config.get("update.check_url", "") or "",
+            })
+
+        @app.route("/api/update/check-url", methods=["POST"])
+        def api_update_check_url_set():
+            """设置更新检查代理 URL。"""
+            data = request.get_json(silent=True) or {}
+            url = (data.get("url") or "").strip()
+            try:
+                self.config.set("update.check_url", url)
+                self.config.save()
+            except Exception as e:
+                self.logger.error(f"Save update.check_url failed: {e}")
+                return jsonify(
+                    {"success": False, "error": f"写入配置失败: {e}"}
+                ), 500
+            self.logger.info(f"Update check URL set: {url or '(cleared)'}")
+            return jsonify({"success": True, "url": url})
+
         # ── status ─────────────────────────────────────────────────
 
         @app.route("/api/status")
@@ -988,6 +1435,11 @@ class QtineApp:
         @app.route("/api/plugins/<name>/reload", methods=["POST"])
         def api_plugin_reload(name):
             ok = bot.plugin_manager.reload(name)
+            return jsonify({"success": ok, "name": name})
+
+        @app.route("/api/plugins/<name>/uninstall", methods=["POST"])
+        def api_plugin_uninstall(name):
+            ok = bot.plugin_manager.uninstall(name)
             return jsonify({"success": ok, "name": name})
 
         # ── plugin upload ──────────────────────────────────────────
@@ -1110,10 +1562,12 @@ class QtineApp:
             is empty or unreachable so the WebUI always renders a list.
             Each entry is annotated with ``installed`` based on the
             currently loaded plugins.
+
+            Locally imported plugins that are not in any remote source
+            are also included so they appear on the market page.
             """
-            installed_names = {
-                p.name for p in bot.plugin_manager.get_all_info()
-            }
+            installed_infos = bot.plugin_manager.get_all_info()
+            installed_names = {p.name for p in installed_infos}
             source_url = (
                 self.config.get("plugins.marketplace_url", "") or ""
             ).strip()
@@ -1160,15 +1614,34 @@ class QtineApp:
                     continue
 
             if using_fallback:
-                plugins = []
+                plugins = list(BUILTIN_MARKET_PLUGINS)
 
             # Annotate installed state.
             for p in plugins:
                 if isinstance(p, dict):
                     p["installed"] = p.get("name") in installed_names
 
+            # Include locally imported plugins not present in the
+            # remote / fallback list so they show up on the page.
+            market_names = {
+                p.get("name") for p in plugins if isinstance(p, dict)
+            }
+            for info in installed_infos:
+                if info.name in market_names:
+                    continue
+                plugins.insert(0, {
+                    "name": info.name,
+                    "version": info.version or "0.0.0",
+                    "author": info.author or "本地",
+                    "description": info.description or "",
+                    "tags": ["本地", "已安装"],
+                    "installed": True,
+                    "is_local": True,
+                })
+
             return jsonify({
                 "source": source_url,
+                "mirrors": mirrors,
                 "using_fallback": using_fallback,
                 "count": len(plugins),
                 "plugins": plugins,
@@ -1186,22 +1659,47 @@ class QtineApp:
 
         @app.route("/api/market/source", methods=["POST"])
         def api_market_source_set():
-            """Update the marketplace source URL and persist to config."""
+            """Update the marketplace source URL and mirrors, persist to config."""
             data = request.get_json(silent=True) or {}
             url = (data.get("url") or "").strip()
+            mirrors = data.get("mirrors") or []
             if not url:
                 return jsonify(
                     {"success": False, "error": "url is required"}
                 ), 400
+            # 清理镜像列表
+            clean_mirrors = []
+            for m in mirrors:
+                if isinstance(m, dict):
+                    u = (m.get("url") or "").strip()
+                    if u:
+                        clean_mirrors.append({
+                            "name": m.get("name", u[:30]) or u[:30],
+                            "url": u,
+                        })
+                elif isinstance(m, str):
+                    u = m.strip()
+                    if u:
+                        clean_mirrors.append({"name": u, "url": u})
             self.config.set("plugins.marketplace_url", url)
+            if clean_mirrors:
+                self.config.set("plugins.marketplace_mirrors", clean_mirrors)
+            else:
+                self.config.set("plugins.marketplace_mirrors", [])
             try:
                 self.config.save()
             except Exception as e:
                 return jsonify(
                     {"success": False, "error": f"Save failed: {e}"}
                 ), 500
-            self.logger.info(f"Marketplace source updated: {url}")
-            return jsonify({"success": True, "url": url})
+            self.logger.info(
+                f"Marketplace source updated: {url}, mirrors: {len(clean_mirrors)}"
+            )
+            return jsonify({
+                "success": True,
+                "url": url,
+                "mirrors": clean_mirrors,
+            })
 
         @app.route("/api/market/install/<name>", methods=["POST"])
         def api_market_install(name):

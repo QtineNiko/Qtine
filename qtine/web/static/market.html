@@ -19,20 +19,31 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
 .nav-item svg{width:22px;height:22px;fill:currentColor}
 .nav-spacer{flex:1}
 .main{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
-.source-bar{display:flex;align-items:center;gap:10px;background:var(--sf);border:1px solid var(--olv);border-radius:var(--rad-m);padding:12px 16px}
-.source-bar .label{font:500 13px/18px Roboto,sans-serif;color:var(--on-sv)}
+.source-bar{display:flex;flex-direction:column;gap:8px;background:var(--sf);border:1px solid var(--olv);border-radius:var(--rad-m);padding:12px 16px}
+.source-bar .row{display:flex;align-items:center;gap:10px}
+.source-bar .label{font:500 13px/18px Roboto,sans-serif;color:var(--on-sv);white-space:nowrap}
 .source-bar .url{font:var(--mono);color:var(--p);flex:1;word-break:break-all;font-size:13px}
 .source-bar .chip{display:inline-flex;align-items:center;padding:2px 10px;border-radius:var(--rad-s);font:500 11px/16px Roboto,sans-serif;background:var(--sfc);color:var(--on-s);border:1px solid var(--ol)}
 .source-bar .chip.ok{background:rgba(125,215,141,.15);color:var(--su)}
 .source-bar .chip.warn{background:rgba(255,217,112,.15);color:var(--w)}
+.source-bar .chip.primary{background:rgba(208,188,255,.15);color:var(--p)}
+.source-bar .divider{border-top:1px solid var(--olv);margin:0 -4px}
+.source-bar .mirror-item{font-size:12px;color:var(--on-sv);font-family:var(--mono);padding:2px 8px;background:var(--sfc);border-radius:var(--rad-s);border:1px solid var(--ol);margin-right:4px;display:inline-block}
+.mirror-empty{font-size:12px;color:var(--ol);font-style:italic}
 .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .toolbar input[type=text]{flex:1;min-width:200px;padding:8px 14px;border-radius:var(--rad-f);border:1px solid var(--ol);background:var(--sf);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;outline:none}
 .toolbar input[type=text]:focus{border-color:var(--p)}
 .toolbar input[type=text]::placeholder{color:var(--ol)}
-.tag-filter{display:flex;gap:6px;flex-wrap:wrap}
-.tag-btn{padding:4px 12px;border-radius:var(--rad-f);font:500 12px/16px Roboto,sans-serif;border:1px solid var(--ol);background:transparent;color:var(--on-sv);cursor:pointer;transition:all var(--tr)}
+.sort-select{padding:8px 14px;border-radius:var(--rad-f);border:1px solid var(--ol);background:var(--sf);color:var(--on-s);font-size:13px;outline:none;cursor:pointer}
+.sort-select:focus{border-color:var(--p)}
+.tag-filter{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tag-btn{padding:4px 12px;border-radius:var(--rad-f);font:500 12px/16px Roboto,sans-serif;border:1px solid var(--ol);background:transparent;color:var(--on-sv);cursor:pointer;transition:all var(--tr);position:relative}
 .tag-btn:hover{background:rgba(202,196,208,.08)}
 .tag-btn.active{background:var(--sc);color:#E8DEF8;border-color:transparent}
+.tag-btn .count{font-size:10px;opacity:.7;margin-left:2px}
+.tag-local{color:var(--p)!important;border-color:var(--p)!important}
+.tag-local.active{background:var(--p);color:var(--op)!important}
+.result-count{font-size:12px;color:var(--on-sv);margin-left:auto}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
 .card{background:var(--sf);border-radius:var(--rad-m);border:1px solid var(--olv);padding:18px;box-shadow:var(--elev1);display:flex;flex-direction:column;gap:8px}
 .card .head{display:flex;align-items:start;gap:12px}
@@ -82,17 +93,14 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
 .mirror-bar .current .name{color:var(--p);font-weight:500}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--olv);border-radius:3px}
 @media(max-width:768px){.nav{width:56px}.nav-item{width:48px;padding:8px 1px;font-size:10px}.grid{grid-template-columns:1fr}.main{padding:12px}}
-</style>
-<link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css">
-<link rel="stylesheet" href="/static/css/qtine-motion.css">
-<script src="https://unpkg.com/mdui@2/mdui.global.js"></script>
-<script src="/static/js/qtine-motion.js" defer></script>
-</head><body>
+</style><script src="/static/theme.js"></script></head><body>
 <header class="top-bar">
   <div style="display:flex;align-items:center;flex:1">
     <svg width="26" height="26" viewBox="0 0 24 24" fill="var(--p)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
     <div class="brand">Qtine <span>插件市场</span></div>
   </div>
+  <input type="file" id="file-input" accept=".zip" style="display:none" onchange="uploadPlugin(this)">
+  <button class="btn" onclick="document.getElementById('file-input').click()" style="margin-right:8px">导入插件</button>
   <button class="btn" onclick="openSourceModal()" style="margin-right:8px">配置源</button>
   <button class="btn" onclick="load()" style="margin-right:8px">刷新</button>
   <button class="btn" onclick="logout()">退出登录</button>
@@ -112,24 +120,47 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
   </nav>
   <main class="main">
     <div class="source-bar">
-      <span class="label">源：</span>
-      <span class="url" id="src-url">加载中...</span>
-      <span class="chip warn" id="src-chip">默认插件源</span>
-      <button class="btn" onclick="openSourceModal()">修改</button>
+      <div class="row">
+        <span class="label">官方源：</span>
+        <span class="url" id="src-url">加载中...</span>
+        <span class="chip warn" id="src-chip">默认插件源</span>
+        <button class="btn" onclick="openSourceModal()">修改</button>
+      </div>
+      <div class="divider" id="src-divider" style="display:none"></div>
+      <div class="row" id="src-mirror-row" style="display:none">
+        <span class="label">镜像源：</span>
+        <span id="src-mirrors" class="mirror-empty">无</span>
+      </div>
     </div>
     <div class="toolbar">
       <input type="text" id="search" placeholder="搜索插件名称 / 作者 / 描述..." oninput="render()">
-      <div class="tag-filter" id="tag-filter"></div>
+      <select class="sort-select" id="sort-by" onchange="render()">
+        <option value="default">默认排序</option>
+        <option value="name">名称 A-Z</option>
+        <option value="downloads">下载量 ↓</option>
+        <option value="version">版本 ↓</option>
+      </select>
     </div>
-    <div class="grid" id="grid"></div>
+    <div class="tag-filter" id="tag-filter"></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="result-count" id="result-count">共 0 个插件</span>
+    </div>
+    <div class="grid" id="grid"><div class="empty">加载中...</div></div>
   </main>
 </div>
 <div class="snackbar" id="sb"></div>
 <div class="modal" id="src-modal">
-  <div class="box">
+  <div class="box wide">
     <h3>配置插件市场源</h3>
-    <p>填入市场 API 地址，Qtine 会从该地址拉取插件列表。留空则使用内置示例列表。地址应返回 JSON，格式为 <code style="color:var(--p)">{ "plugins": [...] }</code> 或直接为数组。</p>
-    <input type="text" id="src-input" placeholder="https://your-market.example.com/api">
+    <div>
+      <label style="font-size:13px;color:var(--on-sv);display:block;margin-bottom:4px">官方源 URL</label>
+      <input type="text" id="src-input" placeholder="https://your-market.example.com/api">
+    </div>
+    <div>
+      <label style="font-size:13px;color:var(--on-sv);display:block;margin-bottom:4px">镜像源（备用，每行一个，格式：名称|URL 或直接URL）</label>
+      <textarea id="src-mirrors-input" rows="4" placeholder="mirror1|https://mirror1.example.com/api&#10;mirror2|https://mirror2.example.com/api&#10;https://mirror3.example.com/api" style="width:100%;padding:10px;border-radius:var(--rad-s);border:1px solid var(--ol);background:var(--sfc);color:var(--on-s);font-family:var(--mono);font-size:13px;resize:vertical"></textarea>
+    </div>
+    <p style="font-size:12px;color:var(--on-sv)">镜像源会在官方源不可达时自动尝试。留空则只使用官方源。地址应返回 JSON，格式为 <code style="color:var(--p)">{ "plugins": [...] }</code> 或直接为数组。</p>
     <div class="actions">
       <button class="btn" onclick="closeSourceModal()">取消</button>
       <button class="btn primary" onclick="saveSource()">保存</button>
@@ -180,7 +211,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
 (function(){
   var ALL_PLUGINS=[];
   var ALL_TAGS=[];
-  var ACTIVE_TAG='';
+  var ACTIVE_TAGS=[];  // 多选标签
   var KEYWORD='';
   var MIRRORS=[];
   var CURRENT_MIRROR='';
@@ -193,7 +224,6 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
   window.toast=toast;
 
   function load(){
-    qtineSkel('#grid',8);
     fetch('/api/market/plugins').then(function(r){
       if(r.status===401){logout();return}
       return r.json()
@@ -208,6 +238,24 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       }else{
         chip.textContent='已连接源';
         chip.className='chip ok';
+      }
+      // 展示镜像源
+      var divider=document.getElementById('src-divider');
+      var mirrorRow=document.getElementById('src-mirror-row');
+      var mirrorSpan=document.getElementById('src-mirrors');
+      var mirrors=d.mirrors||[];
+      if(mirrors.length>0){
+        divider.style.display='';
+        mirrorRow.style.display='';
+        mirrorSpan.innerHTML=mirrors.map(function(m, i){
+          var label=m.name||m.url||m;
+          var u=(typeof m==='string')?m:(m.url||'');
+          return '<span class="mirror-item" title="'+u+'">'+(label||u)+'</span>';
+        }).join('');
+      }else{
+        divider.style.display='none';
+        mirrorRow.style.display='none';
+        mirrorSpan.innerHTML='<span class="mirror-empty">无</span>';
       }
       ALL_PLUGINS=(d.plugins||[]).map(function(p){
         p._tags=(p.tags||[]).slice();
@@ -240,32 +288,85 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
   function renderTags(){
     var box=document.getElementById('tag-filter');
     box.innerHTML='';
+    // 计算每个标签的插件数
+    var tagCounts={};
+    ALL_TAGS.forEach(function(t){tagCounts[t]=0});
+    ALL_PLUGINS.forEach(function(p){(p._tags||[]).forEach(function(t){
+      if(tagCounts[t]!=null)tagCounts[t]++;
+    })});
+    // "全部"按钮
     var all=document.createElement('button');
-    all.className='tag-btn'+(ACTIVE_TAG===''?' active':'');
-    all.textContent='全部';
-    all.onclick=function(){ACTIVE_TAG='';renderTags();render()};
+    all.className='tag-btn'+(ACTIVE_TAGS.length===0?' active':'');
+    all.textContent='全部 ('+ALL_PLUGINS.length+')';
+    all.onclick=function(){ACTIVE_TAGS=[];renderTags();render()};
     box.appendChild(all);
-    ALL_TAGS.forEach(function(t){
+    // 先展示本地/已安装标签
+    var localTags=['本地','已安装'];
+    localTags.forEach(function(t){
+      if(ALL_TAGS.indexOf(t)<0)return;
       var b=document.createElement('button');
-      b.className='tag-btn'+(ACTIVE_TAG===t?' active':'');
-      b.textContent=t;
-      b.onclick=function(){ACTIVE_TAG=t;renderTags();render()};
+      b.className='tag-btn tag-local'+(ACTIVE_TAGS.indexOf(t)>=0?' active':'');
+      b.innerHTML=t+' <span class="count">'+tagCounts[t]+'</span>';
+      b.onclick=function(){toggleTag(t);renderTags();render()};
       box.appendChild(b);
     });
+    // 分隔
+    if(ALL_TAGS.some(function(t){return localTags.indexOf(t)<0})){
+      var sep=document.createElement('span');
+      sep.style.cssText='width:1px;height:18px;background:var(--olv);margin:0 4px;display:inline-block';
+      box.appendChild(sep);
+    }
+    // 其他标签
+    ALL_TAGS.forEach(function(t){
+      if(localTags.indexOf(t)>=0)return;
+      var b=document.createElement('button');
+      b.className='tag-btn'+(ACTIVE_TAGS.indexOf(t)>=0?' active':'');
+      b.innerHTML=t+' <span class="count">'+tagCounts[t]+'</span>';
+      b.onclick=function(){toggleTag(t);renderTags();render()};
+      box.appendChild(b);
+    });
+  }
+  function toggleTag(t){
+    var idx=ACTIVE_TAGS.indexOf(t);
+    if(idx>=0){ACTIVE_TAGS.splice(idx,1)}
+    else{ACTIVE_TAGS.push(t)}
   }
 
   function render(){
     KEYWORD=(document.getElementById('search').value||'').toLowerCase().trim();
+    var sortBy=document.getElementById('sort-by').value;
     var grid=document.getElementById('grid');
     grid.innerHTML='';
     var list=ALL_PLUGINS.filter(function(p){
-      if(ACTIVE_TAG && (p._tags||[]).indexOf(ACTIVE_TAG)<0)return false;
+      // 多选标签：插件必须包含所有选中的标签
+      if(ACTIVE_TAGS.length>0){
+        for(var i=0;i<ACTIVE_TAGS.length;i++){
+          if((p._tags||[]).indexOf(ACTIVE_TAGS[i])<0)return false;
+        }
+      }
       if(KEYWORD){
         var blob=(p.name+' '+(p.author||'')+' '+(p.description||'')+' '+(p._tags||[]).join(' ')).toLowerCase();
         if(blob.indexOf(KEYWORD)<0)return false;
       }
       return true;
     });
+    // 排序
+    if(sortBy==='name'){
+      list.sort(function(a,b){return (a.name||'').localeCompare(b.name||'')});
+    }else if(sortBy==='downloads'){
+      list.sort(function(a,b){return (b.downloads||0)-(a.downloads||0)});
+    }else if(sortBy==='version'){
+      list.sort(function(a,b){
+        var va=(a.version||'0').split('.').map(Number);
+        var vb=(b.version||'0').split('.').map(Number);
+        for(var i=0;i<Math.max(va.length,vb.length);i++){
+          if((va[i]||0)!==(vb[i]||0))return (vb[i]||0)-(va[i]||0);
+        }
+        return 0;
+      });
+    }
+    // 显示数量
+    document.getElementById('result-count').textContent='共 '+list.length+' 个插件';
     if(list.length===0){
       grid.innerHTML='<div class="empty">没有匹配的插件</div>';
       return;
@@ -276,15 +377,19 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       var tagsHtml=(p._tags||[]).map(function(t){return '<span class="chip">'+t+'</span>'}).join('');
       var dl=p.downloads||0;
       var dlText=dl>=1000?(dl/1000).toFixed(1)+'k':String(dl);
+      var isLocal=p.is_local;
       var btnHtml;
       if(p.installed){
-        btnHtml='<button class="btn" disabled>已安装</button>';
+        btnHtml='<button class="btn" disabled>'+(isLocal?'本地已安装':'已安装')+'</button>';
+        if(isLocal){
+          btnHtml+='<button class="btn danger" data-name="'+p.name+'" data-action="uninstall" style="padding:4px 10px;font-size:12px">卸载</button>';
+        }
       }else{
         btnHtml='<button class="btn primary" data-name="'+p.name+'" data-action="install">安装</button>';
       }
       c.innerHTML=
         '<div class="head"><div class="icon">'+initial+'</div>'+
-        '<div style="flex:1"><h3>'+(p.name||'')+'</h3>'+
+        '<div style="flex:1"><h3>'+(p.name||'')+(isLocal?' <span style="font-size:11px;color:var(--p);font-weight:400">（本地）</span>':'')+'</h3>'+
         '<div class="meta">v'+(p.version||'?')+' · '+(p.author||'未知')+(p.size?' · '+p.size:'')+'</div></div></div>'+
         '<div class="desc">'+(p.description||'（无描述）')+'</div>'+
         '<div class="tags">'+tagsHtml+'</div>'+
@@ -304,6 +409,14 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     if(b.dataset.action==='install'){
       var name=b.dataset.name;
       startInstall(name,b);
+    }else if(b.dataset.action==='uninstall'){
+      var name=b.dataset.name;
+      if(!confirm('确定要卸载 "'+name+'" 吗？'))return;
+      b.disabled=true;b.textContent='卸载中...';
+      fetch('/api/plugins/'+encodeURIComponent(name)+'/uninstall',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+        if(d&&d.success){toast('插件 '+name+' 已卸载');load()}
+        else{toast('卸载失败: '+(d&&d.error?d.error:'未知错误'));b.disabled=false;b.textContent='卸载'}
+      }).catch(function(){toast('卸载失败');b.disabled=false;b.textContent='卸载'});
     }
   });
 
@@ -336,13 +449,35 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
   window.openSourceModal=function(){
     fetch('/api/market/source').then(function(r){return r.json()}).then(function(d){
       document.getElementById('src-input').value=d.url||'';
+      var mirrors=d.mirrors||[];
+      var lines=mirrors.map(function(m){
+        if(typeof m==='string')return m;
+        if(m.name&&m.url)return m.name+'|'+m.url;
+        return m.url||'';
+      });
+      document.getElementById('src-mirrors-input').value=lines.join('\n');
       document.getElementById('src-modal').classList.add('show');
     });
   };
   window.closeSourceModal=function(){document.getElementById('src-modal').classList.remove('show')};
   window.saveSource=function(){
     var url=document.getElementById('src-input').value.trim();
-    fetch('/api/market/source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})}).then(function(r){return r.json()}).then(function(d){
+    if(!url){toast('请输入官方源 URL');return}
+    var raw=document.getElementById('src-mirrors-input').value.trim();
+    var mirrors=[];
+    if(raw){
+      raw.split('\n').forEach(function(line){
+        line=line.trim();
+        if(!line)return;
+        var parts=line.split('|');
+        if(parts.length>=2){
+          mirrors.push({name:parts[0].trim(),url:parts.slice(1).join('|').trim()});
+        }else{
+          mirrors.push({url:line});
+        }
+      });
+    }
+    fetch('/api/market/source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,mirrors:mirrors})}).then(function(r){return r.json()}).then(function(d){
       if(d.success){toast('源已保存');closeSourceModal();load()}
       else{toast('保存失败: '+(d.error||'未知错误'))}
     }).catch(function(){toast('保存失败')});
@@ -488,6 +623,16 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
   function escapeHtml(s){
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
+
+  window.uploadPlugin=function(input){
+    var f=input.files[0];if(!f)return;
+    var fd=new FormData();fd.append('file',f);
+    toast('正在导入 '+f.name+' ...');
+    fetch('/api/plugins/upload',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){
+      if(d.success){toast('插件 '+d.name+' 导入成功');load()}else{toast('导入失败: '+(d.error||'未知错误'))}
+    }).catch(function(){toast('导入失败')});
+    input.value='';
+  };
 
   load();
 })();

@@ -57,4 +57,9 @@ webui:
   enabled: true
   password: qtine123
   session_secret: change-me-in-production
+  theme: light-day
   username: admin
+update:
+  check_enabled: true
+  check_url: https://cdn.jsdelivr.net/gh/QtineNiko/Qtine@main/latest.json
+  include_prerelease: false
