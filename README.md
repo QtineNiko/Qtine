@@ -66,10 +66,15 @@ security:
 |  | [适配器管理](https://qtineniko.github.io/#/guide/adapter-manage) | [更新日志](https://qtineniko.github.io/#/guide/changelog) |
 
 ## 🐳 Docker 部署
-
 ```bash
-docker compose up -d
+cp .env.example .env
+# 为 .env 中的三个 Token 填入互不相同的随机值
+mkdir -p data plugins adapters
+chown 10001:10001 config.yml
+chown -R 10001:10001 data plugins adapters
+docker compose up -d --build
 ```
+容器内继续监听 `0.0.0.0:4990`。公网部署需要 HTTPS 反向代理，并配置独立的 OneBot `access_token`。
 
 更多部署选项请参阅 [Docker 部署文档](https://qtineniko.github.io/#/guide/docker) 和 [反向代理文档](https://qtineniko.github.io/#/guide/reverse-proxy)。
 

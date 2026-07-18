@@ -18,7 +18,7 @@ from qtine.core.app import QtineApp
 
 
 def main():
-    app = QtineApp()
+    app = QtineApp(os.environ.get("QTINE_CONFIG_FILE", "config.yml"))
 
     def shutdown_handler(sig, frame):
         app.logger.info("Received shutdown signal, gracefully stopping...")

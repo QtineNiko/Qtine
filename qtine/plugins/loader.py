@@ -12,6 +12,7 @@ import importlib.util
 from typing import Optional, Dict, Any, List
 from qtine.plugins.base import BasePlugin
 from qtine.utils.logger import get_logger
+from qtine.utils.archive import safe_extract_zip, validate_package_name
 
 
 class PluginPackage:
@@ -51,9 +52,14 @@ class PluginPackage:
         return False
 
     def _parse_manifest(self):
-        self.entry_module = self.manifest.get("main", "main.py")
-        if self.entry_module.endswith(".py"):
-            self.entry_module = self.entry_module[:-3]
+        entry = str(self.manifest.get("main", "main.py"))
+        entry = entry.replace("\\", "/")
+        parts = entry.split("/")
+        if entry.startswith("/") or ".." in parts:
+            raise ValueError("Invalid plugin entry path")
+        if entry.endswith(".py"):
+            entry = entry[:-3]
+        self.entry_module = entry
         reqs = self.manifest.get("requirements", [])
         if isinstance(reqs, list):
             self.requirements = reqs
@@ -61,6 +67,9 @@ class PluginPackage:
     def install_requirements(self) -> bool:
         if not self.requirements:
             return True
+        if os.environ.get("QTINE_ALLOW_PLUGIN_PIP_INSTALL") != "1":
+            get_logger().error("Plugin dependency installation is disabled")
+            return False
         logger = get_logger()
         import subprocess
         try:
@@ -81,8 +90,10 @@ class PluginPackage:
         """Extract zip to destination directory, return plugin root path."""
         os.makedirs(dest_dir, exist_ok=True)
         with zipfile.ZipFile(self.path, "r") as zf:
-            zf.extractall(dest_dir)
-        root_dir = self.manifest.get("name", "plugin")
+            safe_extract_zip(zf, dest_dir)
+        root_dir = validate_package_name(
+            self.manifest.get("name", "plugin")
+        )
         full_path = os.path.join(dest_dir, root_dir)
         if not os.path.isdir(full_path):
             files = os.listdir(dest_dir)
@@ -116,7 +127,8 @@ class PluginLoader:
             self.logger.error(f"No package.json found in {zip_path}")
             return None
 
-        pkg.install_requirements()
+        if not pkg.install_requirements():
+            return None
 
         plugin_path = pkg.extract_to(extract_dir)
         self.logger.info(f"Extracted plugin to: {plugin_path}")
@@ -132,7 +144,9 @@ class PluginLoader:
         sys.path.insert(0, plugin_dir)
 
         main_name = pkg.entry_module
-        main_file = os.path.join(plugin_dir, f"{main_name}.py")
+        main_file = os.path.join(
+            plugin_dir, *(f"{main_name}.py".split("/"))
+        )
 
         if not os.path.isfile(main_file):
             sys.path.pop(0)

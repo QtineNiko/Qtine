@@ -20,6 +20,7 @@ from qtine.adapters.base import BaseAdapter
 from qtine.adapters.onebot_v11 import OneBotV11Adapter
 from qtine.utils.logger import get_logger
 from qtine.utils.models import AdapterInfo
+from qtine.utils.archive import safe_extract_zip, validate_package_name
 
 
 class AdapterManager:
@@ -156,13 +157,14 @@ class AdapterManager:
                 if not adapter_name:
                     self.logger.error("Manifest missing 'name'")
                     return None
+                adapter_name = validate_package_name(adapter_name)
 
                 # Extract to ./adapters/<name>/
                 dest = os.path.join("adapters", adapter_name)
                 if os.path.exists(dest):
                     shutil.rmtree(dest)
                 os.makedirs(dest, exist_ok=True)
-                zf.extractall(dest)
+                safe_extract_zip(zf, dest)
 
                 # The real extracted path (may have a wrapper dir)
                 actual_dir = dest
@@ -226,7 +228,15 @@ class AdapterManager:
         self, dir_path: str, manifest: dict
     ) -> Optional[BaseAdapter]:
         entry_file = manifest.get("entry", "adapter.py")
-        entry_path = os.path.join(dir_path, entry_file)
+        entry_parts = entry_file.replace("\\", "/").split("/")
+        if (
+            os.path.isabs(entry_file)
+            or ".." in entry_parts
+            or not entry_file.endswith(".py")
+        ):
+            self.logger.error("Invalid adapter entry path")
+            return None
+        entry_path = os.path.join(dir_path, *entry_parts)
         if not os.path.isfile(entry_path):
             # Try to find it one level down
             for root, _, files in os.walk(dir_path):

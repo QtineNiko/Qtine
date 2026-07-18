@@ -39,6 +39,7 @@ from typing import Dict, List, Optional
 from qtine.plugins.base import BasePlugin
 from qtine.utils.logger import get_logger
 from qtine.utils.models import PluginInfo, PluginType
+from qtine.utils.archive import safe_extract_zip, validate_package_name
 
 
 class PluginManager:
@@ -59,9 +60,12 @@ class PluginManager:
         self._plugin_dir = "./plugins"
         self.logger = get_logger()
         self.bot = None
-
+        self.allow_dependency_install = False
     def set_bot(self, bot):
         self.bot = bot
+        self.allow_dependency_install = bool(
+            bot.config.get("plugins.allow_dependency_install", False)
+        )
 
     def set_plugin_dir(self, path: str):
         self._plugin_dir = path
@@ -288,13 +292,14 @@ class PluginManager:
                 if not plugin_name:
                     self.logger.error("data.json missing 'name'")
                     return None
+                plugin_name = validate_package_name(plugin_name)
 
                 # Extract to plugins/<name>/
                 dest = os.path.join(self._plugin_dir, plugin_name)
                 if os.path.exists(dest):
                     shutil.rmtree(dest)
                 os.makedirs(dest, exist_ok=True)
-                zf.extractall(dest)
+                safe_extract_zip(zf, dest)
 
                 # Handle wrapper directory
                 actual_dir = self._resolve_extracted_dir(dest)
@@ -371,6 +376,11 @@ class PluginManager:
         # Install dependencies if specified
         requires = meta.get("requires", [])
         if isinstance(requires, list) and requires:
+            if not self.allow_dependency_install:
+                self.logger.error(
+                    f"[{plugin_name}] Dependency installation is disabled"
+                )
+                return None
             if not self._install_requires(requires):
                 self.logger.warning(
                     f"[{plugin_name}] Dependency install had errors, "

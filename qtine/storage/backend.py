@@ -132,9 +132,15 @@ class SQLiteStorage(StorageBackend):
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
             self._conn = sqlite3.connect(
-                self._db_path, check_same_thread=False
+                self._db_path,
+                check_same_thread=False,
+                timeout=30,
             )
             self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA synchronous=NORMAL")
+            self._conn.execute("PRAGMA foreign_keys=ON")
+            self._conn.execute("PRAGMA busy_timeout=30000")
         return self._conn
 
     def _init_db(self):
@@ -174,11 +180,12 @@ class SQLiteStorage(StorageBackend):
         conn.commit()
 
     def get(self, key: str, default: Any = None) -> Any:
-        conn = self._get_conn()
-        cursor = conn.execute(
-            "SELECT value FROM kv_store WHERE key = ?", (key,)
-        )
-        row = cursor.fetchone()
+        with self._lock:
+            conn = self._get_conn()
+            cursor = conn.execute(
+                "SELECT value FROM kv_store WHERE key = ?", (key,)
+            )
+            row = cursor.fetchone()
         if row is None:
             return default
         try:
@@ -204,15 +211,16 @@ class SQLiteStorage(StorageBackend):
             conn.commit()
 
     def keys(self, prefix: str = "") -> List[str]:
-        conn = self._get_conn()
-        if prefix:
-            cursor = conn.execute(
-                "SELECT key FROM kv_store WHERE key LIKE ?",
-                (f"{prefix}%",)
-            )
-        else:
-            cursor = conn.execute("SELECT key FROM kv_store")
-        return [row[0] for row in cursor.fetchall()]
+        with self._lock:
+            conn = self._get_conn()
+            if prefix:
+                cursor = conn.execute(
+                    "SELECT key FROM kv_store WHERE key LIKE ?",
+                    (f"{prefix}%",)
+                )
+            else:
+                cursor = conn.execute("SELECT key FROM kv_store")
+            return [row[0] for row in cursor.fetchall()]
 
     def add_message(self, message_id: str, group_id: Optional[str], user_id: str,
                     nickname: str, content: str, message_type: str = "text",
@@ -233,7 +241,6 @@ class SQLiteStorage(StorageBackend):
                      limit: int = 50, offset: int = 0,
                      user_id: Optional[str] = None,
                      keyword: Optional[str] = None) -> List[dict]:
-        conn = self._get_conn()
         query = "SELECT * FROM message_history WHERE 1=1"
         params: list = []
         if group_id is not None:
@@ -247,8 +254,9 @@ class SQLiteStorage(StorageBackend):
             params.append(f"%{keyword}%")
         query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
-        cursor = conn.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self._get_conn().execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
 
     def clear_messages(self, group_id: Optional[str] = None) -> int:
         with self._lock:
@@ -271,19 +279,20 @@ class SQLiteStorage(StorageBackend):
             return count
 
     def get_message_groups(self) -> List[dict]:
-        conn = self._get_conn()
-        cursor = conn.execute("""
-            SELECT group_id, COUNT(*) as count, MAX(timestamp) as last_time
-            FROM message_history
-            GROUP BY group_id
-            ORDER BY last_time DESC
-        """)
-        return [dict(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self._get_conn().execute("""
+                SELECT group_id, COUNT(*) as count, MAX(timestamp) as last_time
+                FROM message_history
+                GROUP BY group_id
+                ORDER BY last_time DESC
+            """)
+            return [dict(row) for row in cursor.fetchall()]
 
     def close(self) -> None:
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+        with self._lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
 
 
 class Storage:

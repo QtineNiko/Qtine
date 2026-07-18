@@ -3,9 +3,13 @@ import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
 
-from qtine.integrations.napcat import EmbeddedNapCat
+try:
+    from qtine.integrations.napcat import EmbeddedNapCat
+except ModuleNotFoundError:
+    EmbeddedNapCat = None
 
 
+@unittest.skipUnless(EmbeddedNapCat, "embedded NapCat is not included")
 class EmbeddedNapCatTests(unittest.TestCase):
     def test_disabled_component_is_not_started(self):
         manager = EmbeddedNapCat({"enabled": False}, os.getcwd())

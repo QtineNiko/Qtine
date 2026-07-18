@@ -15,6 +15,9 @@ venv/
 env/
 .venv/
 .env
+!.env.example
+data/*.log
+.backup/
 
 # IDE
 .idea/

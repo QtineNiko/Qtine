@@ -67,14 +67,17 @@ class OneBotV11AdapterTests(unittest.TestCase):
                     "self_id": 10001,
                 })]
 
-            def receive(self):
+            def recv(self):
                 if self.frames:
                     return self.frames.pop(0)
                 adapter._running = False
                 raise RuntimeError("test connection closed")
 
         ws = ForwardWebSocket()
-        with patch("qtine.adapters.onebot_v11.Client.connect", return_value=ws):
+        with patch(
+            "qtine.adapters.onebot_v11.websocket.create_connection",
+            return_value=ws,
+        ), patch.object(adapter, "_fetch_bot_info"):
             adapter.start()
             deadline = time.time() + 1
             while adapter.info.account_id != "10001" and time.time() < deadline:

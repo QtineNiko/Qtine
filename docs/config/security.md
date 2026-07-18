@@ -4,121 +4,74 @@
 security:
   super_admins:
     - "123456789"
-    - "987654321"
+  login_attempts: 5
+  login_window_seconds: 300
   rate_limit:
     enabled: true
     messages_per_second: 5
     burst: 10
 ```
 
-## super_admins
+## 管理员与限流
 
-- **类型**：string[]
-- **默认**：`[]`
-- **说明**：超级管理员的 QQ 号列表
+`super_admins` 填写有管理权限的 QQ 号。生产环境至少配置一个管理员。
 
-::: warning
-生产环境**必须**配置至少一个管理员，否则无法执行管理类命令。
-:::
+`login_attempts` 和 `login_window_seconds` 限制管理令牌登录失败次数。消息限流由 `rate_limit` 控制。
 
-### 配置示例
+## 管理 API
 
-```yaml
-security:
-  super_admins:
-    - "123456789"      # 管理员1
-    - "987654321"      # 管理员2
+WebUI 使用 HttpOnly Cookie。外部 API 客户端使用 Bearer Token：
+
+```http
+Authorization: Bearer <QTINE_ADMIN_TOKEN>
 ```
 
-::: tip
-QQ 号用字符串形式（带引号），避免被解析成数字。
-:::
+未设置 `QTINE_ADMIN_TOKEN` 时，首次启动会生成 64 位十六进制令牌并写入 `data/token.txt`，文件权限为 `0600`。
 
-## rate_limit
+Docker 生产部署必须通过 `.env` 设置：
 
-频率限制配置，详见 [频率限制](/guide/rate-limit)。
-
-### enabled
-
-- **类型**：bool
-- **默认**：`false`
-- **说明**：是否启用频率限制
-
-### messages_per_second
-
-- **类型**：int
-- **默认**：`5`
-- **说明**：每秒补充的令牌数（长期平均速率）
-
-### burst
-
-- **类型**：int
-- **默认**：`10`
-- **说明**：令牌桶容量（瞬时突发上限）
-
-## 黑名单
-
-黑名单不通过配置文件管理，而是通过命令动态维护：
-
-```
-/ban <QQ号> [原因]     # 添加
-/unban <QQ号>          # 移除
-/blacklist             # 查看
+```dotenv
+QTINE_ADMIN_TOKEN=<至少32字符的随机值>
+QTINE_SESSION_SECRET=<至少32字符的随机值>
+QTINE_ONEBOT_ACCESS_TOKEN=<独立的随机值>
 ```
 
-黑名单存储在 `data/qtine.db`，重启不丢失。
-
-## Token 鉴权
-
-WebUI 和 API 的访问 Token 在启动时自动生成，保存在 `data/token.txt`。
-
-::: tip
-通过 WebUI 设置页可以查看、复制 Token。如果泄露，删除 `data/token.txt` 后重启即可生成新 Token。
-:::
-
-## 安全建议
-
-### 生产环境清单
-
-- [ ] 配置 `super_admins`
-- [ ] 启用频率限制
-- [ ] 设置 OneBot V11 `access_token`
-- [ ] 修改 `webui.session_secret`
-- [ ] 通过反向代理限制 WebUI 访问
-- [ ] 启用 HTTPS
-
-### session_secret
-
-```yaml
-webui:
-  session_secret: "你的随机字符串"
-```
-
-::: warning
-默认的 `qtine-secret-key-change-me` 仅用于开发，生产环境必须修改。
-:::
-
-生成随机字符串：
-
-```bash
-python -c "import secrets; print(secrets.token_hex(32))"
-```
-
-### access_token
+## OneBot Token
 
 ```yaml
 adapters:
   onebot_v11:
-    access_token: "你的随机字符串"
+    access_token: "独立的随机字符串"
 ```
 
-避免未授权的客户端连接 Qtine。
+NapCat 的反向 WebSocket 和 OneBot HTTP API 都必须携带该 Token。不要与管理令牌复用。
 
-## 权限等级
+## WebUI
 
-| 等级 | 说明 | 可执行的命令 |
-|------|------|--------------|
-| `user` | 普通用户 | `#help`、`#qtine`、`/echo` 等 |
-| `admin` | 管理员 | 上述 + `qtine list/enable/disable/...`、`/ban`、`/unban` |
+```yaml
+webui:
+  secure_cookie: true
+  allowed_origins:
+    - "https://bot.example.com"
+  allow_process_control: false
+```
 
-命令的权限级别由插件声明，参考 [插件开发](/develop/plugin)。
+HTTPS 反向代理后应启用 `secure_cookie`。生产 WSGI 模式固定禁用 WebUI 关机和重启，由 Docker 或 systemd 管理进程。
+
+## 扩展安全
+
+```yaml
+plugins:
+  allow_dependency_install: false
+```
+
+插件和适配器是可执行代码，只安装可信来源。默认禁止插件运行时调用 pip 安装依赖。上传 ZIP 会校验路径、符号链接、文件数和解压大小。
+
+## 生产清单
+
+- 配置 `super_admins` 和 OneBot `access_token`
+- 设置 `QTINE_ADMIN_TOKEN`、`QTINE_SESSION_SECRET`
+- 保持 `server.debug: false`
+- 使用 HTTPS 反向代理并设置 `secure_cookie: true`
+- 限制 4990 端口的防火墙访问范围
+- 定期备份 `data/`，并监控 `/health` 和容器日志

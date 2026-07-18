@@ -273,6 +273,7 @@ class OneBotV11Adapter(BaseAdapter):
 
     def _forward_loop(self) -> None:
         while self._running and not self._stop_event.is_set():
+            ws = None
             try:
                 ws = websocket.create_connection(
                     self.forward_ws_url,
@@ -292,6 +293,11 @@ class OneBotV11Adapter(BaseAdapter):
                         f"[{self.name}] Forward WS error: {e}"
                     )
             finally:
+                if ws is not None:
+                    try:
+                        ws.close()
+                    except Exception:
+                        pass
                 self._forward_ws = None
                 self._forward_sid = None
                 self._deregister_forward_client()
@@ -379,8 +385,11 @@ class OneBotV11Adapter(BaseAdapter):
             self._emit_event("request", data)
 
     def handle_message(self, sid: str, data: dict) -> None:
-        """Public alias for _dispatch (used by tests)."""
+        """Public alias for _dispatch."""
         self._dispatch(sid, data)
+
+    def handle_connect(self, sid: str, ws) -> None:
+        self._register_reverse_client(sid, ws)
 
     # ── meta event ───────────────────────────────────────────────────
 
@@ -466,6 +475,8 @@ class OneBotV11Adapter(BaseAdapter):
                     f"[CQ:{t}{',' if params else ''}{params}]"
                 )
         return "".join(parts)
+
+    normalize_message = _normalize
 
     @staticmethod
     def _esc(v: Any) -> str:

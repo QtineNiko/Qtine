@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Qtine Core Application — Flask + WebSocket server."""
 
+import hmac
 import os
 import platform
 import secrets
@@ -11,10 +12,12 @@ import json
 import shutil
 import zipfile
 from typing import Optional, Dict
+from urllib.parse import urlparse
 
 from flask import Flask, request, jsonify, send_from_directory, redirect, abort, Response
 from flask_socketio import SocketIO
 from simple_websocket import Server
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 
 PROJECT_ROOT = os.path.dirname(
@@ -43,6 +46,7 @@ from qtine.core.updater import (
 )
 from qtine.utils.models import Message, Sender, AdapterStatus
 from qtine.utils.logger import QtineLogger, get_logger
+from qtine.utils.network import safe_urlopen, validate_public_http_url
 from qtine.storage.backend import Storage
 
 
@@ -434,6 +438,7 @@ class QtineBot:
             if not url:
                 continue
             try:
+                url = self._validate_outbound_url(url)
                 data = _json.dumps({
                     "event": event,
                     "timestamp": time.time(),
@@ -451,7 +456,7 @@ class QtineBot:
                 # Fire and forget with timeout
                 def do_req(r):
                     try:
-                        with urllib.request.urlopen(r, timeout=5):
+                        with safe_urlopen(r, timeout=5):
                             pass
                     except Exception as e:
                         self.logger.warning(
@@ -573,25 +578,45 @@ class QtineApp:
         web_dir = os.path.abspath(web_dir)
         self.flask_app = Flask(
             __name__,
-            static_folder=web_dir,
-            static_url_path="/static",
+            static_folder=os.path.join(web_dir, "img"),
+            static_url_path="/static/img",
         )
         self._web_dir = web_dir
-        self.flask_app.config["SECRET_KEY"] = self.config.get(
-            "webui.session_secret", "qtine-secret-key-change-me"
-        )
-        self.flask_app.config["MAX_CONTENT_LENGTH"] = (
-            MAX_UPLOAD_MB * 1024 * 1024
+        session_secret = os.environ.get("QTINE_SESSION_SECRET")
+        if not session_secret:
+            session_secret = self.config.get("webui.session_secret", "")
+        self.flask_app.config.update(
+            SECRET_KEY=session_secret or secrets.token_hex(32),
+            MAX_CONTENT_LENGTH=MAX_UPLOAD_MB * 1024 * 1024,
+            SESSION_COOKIE_HTTPONLY=True,
+            SESSION_COOKIE_SAMESITE="Strict",
         )
 
+        proxy_hops = max(
+            0, int(self.config.get("server.trusted_proxy_hops", 0))
+        )
+        if proxy_hops:
+            self.flask_app.wsgi_app = ProxyFix(
+                self.flask_app.wsgi_app,
+                x_for=proxy_hops,
+                x_proto=proxy_hops,
+                x_host=proxy_hops,
+            )
+
+        self._login_buckets: Dict[str, list] = {}
+        self._login_lock = threading.Lock()
+        self._validate_production_config()
         self._init_token()
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        os.makedirs(THEMES_DIR, exist_ok=True)
+        os.makedirs(UPLOAD_DIR, mode=0o700, exist_ok=True)
+        os.makedirs(THEMES_DIR, mode=0o700, exist_ok=True)
 
+        allowed_origins = self.config.get(
+            "webui.allowed_origins", []
+        ) or None
         self.socketio = SocketIO(
             self.flask_app,
             async_mode="threading",
-            cors_allowed_origins="*",
+            cors_allowed_origins=allowed_origins,
             logger=False,
             engineio_logger=False,
         )
@@ -609,26 +634,101 @@ class QtineApp:
 
     # ── auth ─────────────────────────────────────────────────────────
 
+    def _validate_production_config(self) -> None:
+        if not self.config.get("security.production_mode", False):
+            return
+        errors = []
+        if self.config.get("server.debug", False):
+            errors.append("server.debug must be false")
+        onebot = self.config.get("adapters.onebot_v11", {}) or {}
+        onebot_token = (
+            os.environ.get("QTINE_ONEBOT_ACCESS_TOKEN", "").strip()
+            or str(onebot.get("access_token", "")).strip()
+        )
+        if onebot.get("enabled", False) and len(onebot_token) < 16:
+            errors.append("OneBot access token must be at least 16 characters")
+        admin_token = os.environ.get("QTINE_ADMIN_TOKEN", "").strip()
+        if os.environ.get("QTINE_MANAGED_SERVER") == "1" and len(admin_token) < 32:
+            errors.append("QTINE_ADMIN_TOKEN must be at least 32 characters")
+        session_secret = os.environ.get("QTINE_SESSION_SECRET", "").strip()
+        if os.environ.get("QTINE_MANAGED_SERVER") == "1" and len(session_secret) < 32:
+            errors.append("QTINE_SESSION_SECRET must be at least 32 characters")
+        if errors:
+            raise RuntimeError("Invalid production configuration: " + "; ".join(errors))
+
     def _init_token(self):
         token_file = os.path.join("data", "token.txt")
+        env_token = os.environ.get("QTINE_ADMIN_TOKEN", "").strip()
+        if env_token:
+            if len(env_token) < 32:
+                raise RuntimeError("QTINE_ADMIN_TOKEN must be at least 32 characters")
+            self._admin_token = env_token
+            self.logger.info("Admin token loaded from environment")
+            return
+
+        os.makedirs("data", mode=0o700, exist_ok=True)
         if os.path.isfile(token_file):
-            with open(token_file, "r") as f:
+            with open(token_file, "r", encoding="utf-8") as f:
                 self._admin_token = f.read().strip()
+            if len(self._admin_token) < 32:
+                raise RuntimeError("Admin token file is invalid")
         else:
-            self._admin_token = secrets.token_hex(16)
-            os.makedirs("data", exist_ok=True)
-            with open(token_file, "w") as f:
+            self._admin_token = secrets.token_hex(32)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            fd = os.open(token_file, flags, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(self._admin_token)
-        self.logger.info(
-            f"Admin token: {self._admin_token} "
-            f"(also available at /api/token and in WebUI Settings)"
-        )
+        try:
+            os.chmod(token_file, 0o600)
+        except OSError:
+            pass
+        self.logger.info(f"Admin token loaded from {token_file}")
+
+    def _provided_admin_token(self) -> str:
+        auth = request.headers.get("Authorization", "")
+        if auth.lower().startswith("bearer "):
+            return auth[7:].strip()
+        return request.cookies.get("qtine_token", "")
+
+    def _is_authenticated(self) -> bool:
+        token = self._provided_admin_token()
+        return bool(token) and hmac.compare_digest(token, self._admin_token)
 
     def _check_auth(self):
-        token = request.cookies.get("qtine_token", "")
-        if token != self._admin_token:
+        if not self._is_authenticated():
             return redirect("/webui/login")
         return None
+
+    def _login_allowed(self, client: str) -> bool:
+        now = time.monotonic()
+        limit = max(1, int(self.config.get("security.login_attempts", 5)))
+        window = max(10, int(self.config.get("security.login_window_seconds", 300)))
+        with self._login_lock:
+            attempts = [
+                stamp for stamp in self._login_buckets.get(client, [])
+                if now - stamp < window
+            ]
+            self._login_buckets[client] = attempts
+            return len(attempts) < limit
+
+    def _record_login_failure(self, client: str) -> None:
+        with self._login_lock:
+            self._login_buckets.setdefault(client, []).append(time.monotonic())
+
+    @staticmethod
+    def _request_origin_matches() -> bool:
+        origin = request.headers.get("Origin")
+        if not origin:
+            return True
+        parsed = urlparse(origin)
+        return (
+            parsed.scheme in {"http", "https"}
+            and parsed.netloc.lower() == request.host.lower()
+        )
+    @staticmethod
+    def _validate_outbound_url(url: str) -> str:
+        return validate_public_http_url(url)
+
 
     # ── helpers ──────────────────────────────────────────────────────
 
@@ -653,6 +753,52 @@ class QtineApp:
         bot = self.bot
         web_dir = self._web_dir
 
+        @app.before_request
+        def protect_management_api():
+            if not request.path.startswith("/api/"):
+                return None
+            if request.path == "/api/verify-token":
+                if not self._request_origin_matches():
+                    return jsonify({"error": "Invalid request origin"}), 403
+                return None
+            if not self._is_authenticated():
+                return jsonify({"error": "Unauthorized"}), 401
+            if (
+                request.method not in {"GET", "HEAD", "OPTIONS"}
+                and not self._request_origin_matches()
+            ):
+                return jsonify({"error": "Invalid request origin"}), 403
+            return None
+
+        @app.after_request
+        def add_security_headers(response):
+            response.headers.setdefault("X-Content-Type-Options", "nosniff")
+            response.headers.setdefault("X-Frame-Options", "DENY")
+            response.headers.setdefault("Referrer-Policy", "no-referrer")
+            response.headers.setdefault(
+                "Permissions-Policy",
+                "camera=(), microphone=(), geolocation=()",
+            )
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'self'; script-src 'self' 'unsafe-inline' "
+                "https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data:; connect-src 'self' ws: wss:; "
+                "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+            )
+            if request.path.startswith(("/api/", "/webui")):
+                response.headers["Cache-Control"] = "no-store"
+            if request.is_secure:
+                response.headers.setdefault(
+                    "Strict-Transport-Security",
+                    "max-age=31536000; includeSubDomains",
+                )
+            return response
+
+        @app.errorhandler(413)
+        def request_too_large(_error):
+            return jsonify({"error": "Request body too large"}), 413
+
         def serve_page(filename):
             return send_from_directory(web_dir, filename)
 
@@ -668,8 +814,7 @@ class QtineApp:
 
         @app.route("/webui/login")
         def serve_login():
-            token = request.cookies.get("qtine_token", "")
-            if token == self._admin_token:
+            if self._is_authenticated():
                 return redirect("/webui/dashboard")
             return serve_page("login.html")
 
@@ -901,42 +1046,44 @@ class QtineApp:
 
         @app.route("/api/verify-token", methods=["POST"])
         def api_verify_token():
+            client = request.remote_addr or "unknown"
+            if not self._login_allowed(client):
+                return jsonify({"valid": False, "error": "Too many attempts"}), 429
             data = request.get_json(silent=True) or {}
-            valid = data.get("token", "") == self._admin_token
+            supplied = str(data.get("token", ""))
+            valid = bool(supplied) and hmac.compare_digest(
+                supplied, self._admin_token
+            )
             resp = jsonify({"valid": valid})
             if valid:
+                with self._login_lock:
+                    self._login_buckets.pop(client, None)
                 resp.set_cookie(
                     "qtine_token",
                     self._admin_token,
-                    max_age=30 * 24 * 3600,
+                    max_age=12 * 3600,
                     httponly=True,
-                    samesite="Lax",
+                    secure=bool(self.config.get("webui.secure_cookie", False)),
+                    samesite="Strict",
+                    path="/",
                 )
+            else:
+                self._record_login_failure(client)
             return resp
 
         @app.route("/api/token")
         def api_token():
-            """Return the admin token (only if authenticated)."""
-            token = request.cookies.get("qtine_token", "")
-            if token != self._admin_token:
-                return jsonify({"error": "Unauthorized"}), 401
             return jsonify({"token": self._admin_token})
 
         # ── security: super admins ────────────────────────────────
 
         @app.route("/api/security/admins")
         def api_security_admins():
-            token = request.cookies.get("qtine_token", "")
-            if token != self._admin_token:
-                return jsonify({"error": "Unauthorized"}), 401
             admins = self.config.get("security.super_admins", []) or []
             return jsonify({"admins": admins})
 
         @app.route("/api/security/admins", methods=["POST"])
         def api_security_admins_save():
-            token = request.cookies.get("qtine_token", "")
-            if token != self._admin_token:
-                return jsonify({"error": "Unauthorized"}), 401
             data = request.get_json(silent=True) or {}
             admins = data.get("admins", [])
             if not isinstance(admins, list):
@@ -1588,7 +1735,7 @@ class QtineApp:
                     req = urllib.request.Request(
                         url, headers={"Accept": "application/json"}
                     )
-                    with urllib.request.urlopen(
+                    with safe_urlopen(
                         req, timeout=5
                     ) as resp:
                         raw = resp.read().decode("utf-8", "ignore")
@@ -1667,25 +1814,12 @@ class QtineApp:
                 return jsonify(
                     {"success": False, "error": "url is required"}
                 ), 400
-            # 清理镜像列表
-            clean_mirrors = []
-            for m in mirrors:
-                if isinstance(m, dict):
-                    u = (m.get("url") or "").strip()
-                    if u:
-                        clean_mirrors.append({
-                            "name": m.get("name", u[:30]) or u[:30],
-                            "url": u,
-                        })
-                elif isinstance(m, str):
-                    u = m.strip()
-                    if u:
-                        clean_mirrors.append({"name": u, "url": u})
+            try:
+                url = validate_public_http_url(url)
+            except (OSError, ValueError) as e:
+                return jsonify({"success": False, "error": str(e)}), 400
             self.config.set("plugins.marketplace_url", url)
-            if clean_mirrors:
-                self.config.set("plugins.marketplace_mirrors", clean_mirrors)
-            else:
-                self.config.set("plugins.marketplace_mirrors", [])
+            self.config.set("plugins.marketplace_mirrors", [])
             try:
                 self.config.save()
             except Exception as e:
@@ -1724,7 +1858,7 @@ class QtineApp:
                     import urllib.request
                     import json as _json
 
-                    with urllib.request.urlopen(
+                    with safe_urlopen(
                         fetch_url, timeout=5
                     ) as resp:
                         entry = _json.loads(
@@ -1770,10 +1904,18 @@ class QtineApp:
 
                 os.makedirs(UPLOAD_DIR, exist_ok=True)
                 dest = os.path.join(UPLOAD_DIR, f"{name}.zip")
-                with urllib.request.urlopen(
-                    download_url, timeout=30
-                ) as r, open(dest, "wb") as out:
-                    out.write(r.read())
+                with safe_urlopen(download_url, timeout=30) as r, open(
+                    dest, "wb"
+                ) as out:
+                    remaining = MAX_UPLOAD_MB * 1024 * 1024
+                    while True:
+                        chunk = r.read(min(1024 * 1024, remaining + 1))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                        if remaining < 0:
+                            raise ValueError("Plugin download is too large")
+                        out.write(chunk)
             except Exception as e:
                 return jsonify({
                     "success": False,
@@ -1815,6 +1957,10 @@ class QtineApp:
                 return jsonify(
                     {"success": False, "error": "url is required"}
                 ), 400
+            try:
+                url = validate_public_http_url(url)
+            except (OSError, ValueError) as e:
+                return jsonify({"success": False, "error": str(e)}), 400
             self.storage.set("market_mirror", url)
             return jsonify({"success": True, "current": url})
 
@@ -1838,7 +1984,7 @@ class QtineApp:
                 start = time.time()
                 try:
                     req = urllib.request.Request(url, method="HEAD")
-                    with urllib.request.urlopen(req, timeout=5) as r:
+                    with safe_urlopen(req, timeout=5) as r:
                         latency = (time.time() - start) * 1000
                         results.append({
                             "name": m["name"],
@@ -1870,6 +2016,10 @@ class QtineApp:
                 return jsonify(
                     {"success": False, "error": "url is required"}
                 ), 400
+            try:
+                url = validate_public_http_url(url)
+            except (OSError, ValueError) as e:
+                return jsonify({"success": False, "error": str(e)}), 400
             if not name:
                 name = url[:20]
             custom = self.storage.get("market_custom_mirrors", []) or []
@@ -1910,7 +2060,7 @@ class QtineApp:
                         source_url.rstrip("/")
                         + f"/plugins/{name}/readme"
                     )
-                    with urllib.request.urlopen(
+                    with safe_urlopen(
                         url, timeout=10
                     ) as r:
                         d = _json.loads(
@@ -1935,7 +2085,7 @@ class QtineApp:
                     import json as _json
 
                     url = source_url.rstrip("/") + f"/plugins/{name}"
-                    with urllib.request.urlopen(
+                    with safe_urlopen(
                         url, timeout=10
                     ) as r:
                         d = _json.loads(
@@ -2253,6 +2403,10 @@ class QtineApp:
                     "success": False,
                     "error": "url 是必填项",
                 }), 400
+            try:
+                url = self._validate_outbound_url(url)
+            except (OSError, ValueError) as e:
+                return jsonify({"success": False, "error": str(e)}), 400
             webhooks = bot.storage.get("webhooks", [])
             webhook = {
                 "id": secrets.token_hex(8),
@@ -2435,7 +2589,9 @@ class QtineApp:
         # ── WebUI WebSocket ────────────────────────────────────────
 
         @self.socketio.on("connect", namespace="/ws/webui")
-        def webui_connect():
+        def webui_connect(auth=None):
+            if not self._is_authenticated() or not self._request_origin_matches():
+                return False
             self.logger.info("WebUI client connected")
 
         @self.socketio.on("disconnect", namespace="/ws/webui")
@@ -2446,6 +2602,11 @@ class QtineApp:
 
         @app.route("/api/shutdown", methods=["POST"])
         def api_shutdown():
+            if (
+                os.environ.get("QTINE_MANAGED_SERVER") == "1"
+                or not self.config.get("webui.allow_process_control", False)
+            ):
+                return jsonify({"error": "Process control is disabled"}), 403
             self.logger.warning("Shutdown requested via WebUI")
             threading.Thread(
                 target=lambda: (self.shutdown(), os._exit(0)),
@@ -2455,6 +2616,11 @@ class QtineApp:
 
         @app.route("/api/restart", methods=["POST"])
         def api_restart():
+            if (
+                os.environ.get("QTINE_MANAGED_SERVER") == "1"
+                or not self.config.get("webui.allow_process_control", False)
+            ):
+                return jsonify({"error": "Process control is disabled"}), 403
             self.logger.warning("Restart requested via WebUI")
             import subprocess
             threading.Thread(
@@ -2474,7 +2640,12 @@ class QtineApp:
 
     def _setup_adapters(self):
         # OneBot V11 (built-in)
-        onebot_config = self.config.get("adapters.onebot_v11", {})
+        onebot_config = dict(
+            self.config.get("adapters.onebot_v11", {}) or {}
+        )
+        env_token = os.environ.get("QTINE_ONEBOT_ACCESS_TOKEN", "").strip()
+        if env_token:
+            onebot_config["access_token"] = env_token
         if onebot_config.get("enabled", False):
             adapter = self.bot.adapter_manager.create_onebot_adapter(
                 onebot_config, bot=self.bot
@@ -2551,7 +2722,20 @@ class QtineApp:
             path = environ.get("PATH_INFO", "")
             upgrade = environ.get("HTTP_UPGRADE", "").lower()
             if path == ws_path_ref and "websocket" in upgrade:
-                # WebSocket upgrade — handle directly
+                if hasattr(adapter_ref, "is_authorized"):
+                    headers = {
+                        key[5:].replace("_", "-").title(): value
+                        for key, value in environ.items()
+                        if key.startswith("HTTP_")
+                    }
+                    if not adapter_ref.is_authorized(
+                        headers, environ.get("QUERY_STRING", "")
+                    ):
+                        start_response(
+                            "401 Unauthorized",
+                            [("Content-Type", "text/plain")],
+                        )
+                        return [b"Unauthorized"]
                 logger_ref.info(
                     f"[{name_ref}] WS upgrade from "
                     f"{environ.get('REMOTE_ADDR', '?')}"
@@ -2598,12 +2782,15 @@ class QtineApp:
                 f"Adapter [{name}] WS: ws://{host}:{port}{path}"
             )
 
+        if debug:
+            self.logger.warning("Debug mode is enabled; do not use it in production")
         self.socketio.run(
             self.flask_app,
             host=host,
             port=port,
             debug=debug,
-            allow_unsafe_werkzeug=True,
+            allow_unsafe_werkzeug=bool(debug),
+            use_reloader=False,
         )
 
     def shutdown(self):

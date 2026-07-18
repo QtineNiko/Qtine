@@ -27,11 +27,15 @@ logging:
   level: INFO
   max_size_mb: 10
 plugins:
+  allow_dependency_install: false
   autoload: []
   dir: ./plugins
   marketplace_mirrors: []
-  marketplace_url: http://xingruo.chat:2456/api/plugins
+  marketplace_url: ''
 security:
+  production_mode: true
+  login_attempts: 5
+  login_window_seconds: 300
   blacklist:
     enabled: true
     groups: []
@@ -48,6 +52,7 @@ server:
   debug: false
   host: 0.0.0.0
   port: 4990
+  trusted_proxy_hops: 0
 storage:
   backend: sqlite
   backup_interval_hours: 24
@@ -58,8 +63,11 @@ update:
   check_url: https://cdn.jsdelivr.net/gh/QtineNiko/Qtine@main/latest.json
   include_prerelease: false
 webui:
+  allow_process_control: false
+  allowed_origins: []
   enabled: true
   password: qtine123
+  secure_cookie: false
   session_secret: change-me-in-production
   theme: material-purple
   username: admin

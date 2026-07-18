@@ -34,7 +34,12 @@ class Config:
 
     def _defaults(self) -> Dict[str, Any]:
         return {
-            "server": {"host": "0.0.0.0", "port": 4990, "debug": False},
+            "server": {
+                "host": "0.0.0.0",
+                "port": 4990,
+                "debug": False,
+                "trusted_proxy_hops": 0,
+            },
             "adapters": {
                 "onebot_v11": {
                     "enabled": True,
@@ -51,14 +56,15 @@ class Config:
             "plugins": {
                 "dir": "./plugins",
                 "autoload": [],
+                "allow_dependency_install": False,
                 "marketplace_url": "",
                 "marketplace_mirrors": [],
             },
             "webui": {
                 "enabled": True,
-                "username": "admin",
-                "password": "qtine123",
-                "session_secret": "",
+                "secure_cookie": False,
+                "allowed_origins": None,
+                "allow_process_control": False,
             },
             "storage": {
                 "backend": "sqlite",
@@ -67,7 +73,10 @@ class Config:
                 "backup_keep_count": 7,
             },
             "security": {
+                "production_mode": False,
                 "super_admins": [],
+                "login_attempts": 5,
+                "login_window_seconds": 300,
                 "rate_limit": {
                     "enabled": True,
                     "messages_per_second": 5,
@@ -134,3 +143,10 @@ class Config:
     @property
     def data(self) -> Dict[str, Any]:
         return self._data
+
+    @data.setter
+    def data(self, value: Dict[str, Any]) -> None:
+        if not isinstance(value, dict):
+            raise TypeError("Configuration data must be a dictionary")
+        self._data = value
+        self._merge_defaults(self._data, self._defaults())
