@@ -36,7 +36,12 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
 .pager span{font-size:12px;color:var(--on-sv)}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--olv);border-radius:3px}
 @media(max-width:768px){.nav{width:56px}.nav-item{width:48px;padding:8px 1px;font-size:10px}.main{padding:0}}
-</style></head><body>
+</style>
+<link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css">
+<link rel="stylesheet" href="/static/css/qtine-motion.css">
+<script src="https://unpkg.com/mdui@2/mdui.global.js"></script>
+<script src="/static/js/qtine-motion.js" defer></script>
+</head><body>
 <header class="top-bar">
   <div style="display:flex;align-items:center;flex:1">
     <svg width="26" height="26" viewBox="0 0 24 24" fill="var(--p)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
@@ -66,7 +71,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       <input type="text" id="search-input" placeholder="搜索消息内容..." style="flex:1;min-width:200px">
       <button class="btn primary" onclick="load()">搜索</button>
     </div>
-    <div class="msg-list" id="msg-list"><div class="empty">加载中...</div></div>
+    <div class="msg-list" id="msg-list"></div>
     <div class="pager">
       <button class="btn" id="prev-btn" onclick="prevPage()">上一页</button>
       <span id="page-info">第 1 页</span>
@@ -108,7 +113,8 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     var list = document.getElementById('msg-list');
     var gid = getGroup();
     var kw = getKeyword();
-    list.innerHTML = '<div class="empty">加载中...</div>';
+    list.innerHTML = '';
+    qtineSkelText('#msg-list',6);
     var url = '/api/messages?limit='+pageSize+'&offset='+(page*pageSize);
     if(gid)url += '&group_id='+encodeURIComponent(gid);
     if(kw)url += '&keyword='+encodeURIComponent(kw);
