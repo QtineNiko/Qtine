@@ -883,6 +883,30 @@ class QtineApp:
                 return jsonify({"error": "Unauthorized"}), 401
             return jsonify({"token": self._admin_token})
 
+        # ── security: super admins ────────────────────────────────
+
+        @app.route("/api/security/admins")
+        def api_security_admins():
+            token = request.cookies.get("qtine_token", "")
+            if token != self._admin_token:
+                return jsonify({"error": "Unauthorized"}), 401
+            admins = self.config.get("security.super_admins", []) or []
+            return jsonify({"admins": admins})
+
+        @app.route("/api/security/admins", methods=["POST"])
+        def api_security_admins_save():
+            token = request.cookies.get("qtine_token", "")
+            if token != self._admin_token:
+                return jsonify({"error": "Unauthorized"}), 401
+            data = request.get_json(silent=True) or {}
+            admins = data.get("admins", [])
+            if not isinstance(admins, list):
+                return jsonify({"error": "Invalid admins format"}), 400
+            admins = [str(a).strip() for a in admins if str(a).strip()]
+            self.config.set("security.super_admins", admins)
+            self.config.save()
+            return jsonify({"success": True, "admins": admins})
+
         # ── status ─────────────────────────────────────────────────
 
         @app.route("/api/status")

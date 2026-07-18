@@ -53,6 +53,7 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
         <button class="copy-btn" onclick="toggleToken()">显示/隐藏</button>
       </div>
     </div>
+    <div class="card"><h3>全局管理员</h3><p style="font-size:13px;color:var(--on-sv);margin-bottom:8px">配置超级管理员QQ号，多个以逗号或换行分隔。管理员可使用 <code style="color:var(--p)">qtine</code> 系列命令。</p><textarea id="admins-ta" style="width:100%;height:100px;background:var(--sfc);color:var(--on-s);border:1px solid var(--ol);border-radius:var(--rad-s);padding:10px;font-family:inherit;font-size:13px;resize:vertical;margin-bottom:8px" placeholder="例如：123456789, 987654321"></textarea><div style="display:flex;gap:8px"><button class="btn" onclick="saveAdmins()">保存</button><span id="admins-msg" style="font-size:13px;color:var(--on-sv);align-self:center"></span></div></div>
     <div class="card"><h3>服务器</h3><table id="srv-tbl"><tr><td>版本</td><td id="ver">--</td></tr><tr><td>设备</td><td id="dev">--</td></tr><tr><td>运行状态</td><td id="stat">--</td></tr><tr><td>运行时长</td><td id="up">--</td></tr></table></div>
     <div class="card"><h3>存储</h3><table><tr><td>后端</td><td>SQLite</td></tr><tr><td>路径</td><td>./data/qtine.db</td></tr></table></div>
     <div class="card"><h3>危险操作</h3><p style="font-size:13px;color:var(--on-sv);margin-bottom:12px">以下操作将影响正在运行的机器人进程。</p><div style="display:flex;gap:8px"><button class="btn danger" onclick="shutdown()">关闭机器人</button><button class="btn danger" onclick="restart()">重启机器人</button></div></div>
@@ -94,6 +95,26 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
   };
   window.shutdown=function(){if(confirm('确定要关闭机器人吗？需要手动重新启动。')){fetch('/api/shutdown',{method:'POST'});alert('关闭信号已发送。')}};
   window.restart=function(){if(confirm('确定要重启机器人吗？')){fetch('/api/restart',{method:'POST'});alert('重启信号已发送。')}};
-  loadToken();loadStatus();setInterval(loadStatus,5000);
+  function loadAdmins(){
+    fetch('/api/security/admins').then(function(r){
+      if(r.status===401){logout();return}
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
+      var ta=document.getElementById('admins-ta');
+      ta.value=(d.admins||[]).join('\n');
+    });
+  }
+  window.saveAdmins=function(){
+    var ta=document.getElementById('admins-ta');
+    var raw=ta.value||'';
+    var list=raw.split(/[\n,，]/).map(function(s){return s.trim()}).filter(function(s){return s.length>0});
+    fetch('/api/security/admins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admins:list})}).then(function(r){return r.json()}).then(function(d){
+      var msg=document.getElementById('admins-msg');
+      if(d&&d.success){msg.textContent='已保存';ta.value=(d.admins||[]).join('\n');setTimeout(function(){msg.textContent=''},2000)}
+      else{msg.textContent='保存失败：'+(d&&d.error?d.error:'未知错误')}
+    });
+  };
+  loadToken();loadStatus();loadAdmins();setInterval(loadStatus,5000);
 })();
 </script></body></html>

@@ -44,8 +44,7 @@ security:
   sensitive_words:
     enabled: false
     word_file: ./data/sensitive_words.txt
-  super_admins:
-  - 你的QQ号
+  super_admins: []
 server:
   debug: false
   host: 0.0.0.0
