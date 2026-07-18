@@ -54,27 +54,13 @@ UPLOAD_DIR = os.path.join("data", "uploads")
 MAX_UPLOAD_MB = 50
 ALLOWED_EXTENSIONS = {"zip"}
 
-# 主题相关路径
 THEMES_DIR = os.path.join("data", "themes")
 BUILTIN_THEMES_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "web", "static", "builtin-themes.json",
 )
 DEFAULT_THEME = "material-purple"
-
-# 默认 GitHub 加速镜像（10 个）
-DEFAULT_GITHUB_MIRRORS = [
-    {"name": "GitHub 官方", "url": "https://github.com"},
-    {"name": "ghproxy", "url": "https://ghproxy.com"},
-    {"name": "99988866", "url": "https://gh.api.99988866.xyz"},
-    {"name": "mirror.ghproxy", "url": "https://mirror.ghproxy.com"},
-    {"name": "gh-proxy", "url": "https://gh-proxy.com"},
-    {"name": "xcxgw", "url": "https://gh.xcxgw.com"},
-    {"name": "ghps", "url": "https://ghps.cc"},
-    {"name": "d-ai workers", "url": "https://gh.d-ai.workers.dev"},
-    {"name": "llkk", "url": "https://gh.llkk.cc"},
-    {"name": "gitmirror", "url": "https://hub.gitmirror.com"},
-]
+GITHUB_OFFICIAL_URL = "https://github.com"
 
 # Built-in marketplace demo entries. Used as fallback when no remote
 # marketplace source is configured (or the configured source is unreachable),
@@ -1718,14 +1704,10 @@ class QtineApp:
             source_url = (
                 self.config.get("plugins.marketplace_url", "") or ""
             ).strip()
-            mirrors = (
-                self.config.get("plugins.marketplace_mirrors", []) or []
-            )
             using_fallback = True
             plugins: list = []
 
-            urls_to_try = [source_url] + list(mirrors)
-            for url in urls_to_try:
+            for url in [source_url]:
                 if not url:
                     continue
                 try:
@@ -1799,9 +1781,7 @@ class QtineApp:
             """Return the configured marketplace source URLs."""
             return jsonify({
                 "url": self.config.get("plugins.marketplace_url", "") or "",
-                "mirrors": (
-                    self.config.get("plugins.marketplace_mirrors", []) or []
-                ),
+                "mirrors": [],
             })
 
         @app.route("/api/market/source", methods=["POST"])
@@ -1887,17 +1867,6 @@ class QtineApp:
                     "name": name,
                 }), 400
 
-            # Apply mirror if configured and download_url is from GitHub
-            mirror_url = self.storage.get("market_mirror", "") or ""
-            if (
-                mirror_url
-                and "github.com" in download_url
-                and mirror_url != "https://github.com"
-            ):
-                download_url = download_url.replace(
-                    "https://github.com", mirror_url.rstrip("/")
-                )
-
             # Download to data/uploads/<name>.zip
             try:
                 import urllib.request
@@ -1929,117 +1898,65 @@ class QtineApp:
                 {"success": False, "error": "Plugin import failed"}
             ), 400
 
-        # ── marketplace: mirrors / speedtest / readme ──────────────
+        # ── marketplace: official GitHub source / readme ───────────
 
         @app.route("/api/market/mirrors")
         def api_market_mirrors():
-            """返回 GitHub 加速镜像列表，含用户自定义的。"""
-            custom = self.storage.get("market_custom_mirrors", []) or []
-            current = self.storage.get(
-                "market_mirror", "https://github.com"
-            ) or "https://github.com"
-            all_mirrors = list(DEFAULT_GITHUB_MIRRORS) + [
-                {"name": m.get("name", "自定义"), "url": m.get("url", "")}
-                for m in custom
-                if m.get("url")
-            ]
             return jsonify({
-                "mirrors": all_mirrors,
-                "current": current,
+                "mirrors": [
+                    {"name": "GitHub 官方", "url": GITHUB_OFFICIAL_URL}
+                ],
+                "current": GITHUB_OFFICIAL_URL,
             })
 
         @app.route("/api/market/mirrors/set", methods=["POST"])
         def api_market_mirrors_set():
-            """设置当前使用的加速源。"""
             data = request.get_json(silent=True) or {}
-            url = (data.get("url") or "").strip()
-            if not url:
-                return jsonify(
-                    {"success": False, "error": "url is required"}
-                ), 400
-            try:
-                url = validate_public_http_url(url)
-            except (OSError, ValueError) as e:
-                return jsonify({"success": False, "error": str(e)}), 400
-            self.storage.set("market_mirror", url)
-            return jsonify({"success": True, "current": url})
+            url = (data.get("url") or "").rstrip("/")
+            if url != GITHUB_OFFICIAL_URL:
+                return jsonify({
+                    "success": False,
+                    "error": "Only the official GitHub source is allowed",
+                }), 400
+            return jsonify({"success": True, "current": GITHUB_OFFICIAL_URL})
 
         @app.route("/api/market/mirrors/speedtest")
         def api_market_mirrors_speedtest():
-            """对所有镜像进行测速，返回最快的。"""
             import urllib.request
 
-            mirrors = DEFAULT_GITHUB_MIRRORS[:]
-            custom = self.storage.get("market_custom_mirrors", []) or []
-            for m in custom:
-                if m.get("url"):
-                    mirrors.append(
-                        {"name": m.get("name", "自定义"), "url": m["url"]}
-                    )
-
-            results = []
-            test_path = "/QtineNiko/Qtine"
-            for m in mirrors:
-                url = m["url"].rstrip("/") + test_path
-                start = time.time()
-                try:
-                    req = urllib.request.Request(url, method="HEAD")
-                    with safe_urlopen(req, timeout=5) as r:
-                        latency = (time.time() - start) * 1000
-                        results.append({
-                            "name": m["name"],
-                            "url": m["url"],
-                            "latency": round(latency, 0),
-                        })
-                except Exception:
-                    results.append({
-                        "name": m["name"],
-                        "url": m["url"],
-                        "latency": 99999,
-                    })
-
-            results.sort(key=lambda x: x["latency"])
-            fastest = (
-                results[0]["url"]
-                if results and results[0]["latency"] < 99999
-                else None
-            )
-            return jsonify({"results": results, "fastest": fastest})
+            start = time.time()
+            latency = 99999
+            try:
+                req = urllib.request.Request(
+                    GITHUB_OFFICIAL_URL + "/QtineNiko/Qtine", method="HEAD"
+                )
+                with safe_urlopen(req, timeout=5):
+                    latency = round((time.time() - start) * 1000, 0)
+            except Exception:
+                pass
+            result = {
+                "name": "GitHub 官方",
+                "url": GITHUB_OFFICIAL_URL,
+                "latency": latency,
+            }
+            fastest = GITHUB_OFFICIAL_URL if latency < 99999 else None
+            return jsonify({"results": [result], "fastest": fastest})
 
         @app.route("/api/market/mirrors/custom", methods=["POST"])
         def api_market_mirrors_custom_add():
-            """添加自定义加速源。"""
-            data = request.get_json(silent=True) or {}
-            name = (data.get("name") or "").strip()
-            url = (data.get("url") or "").strip()
-            if not url:
-                return jsonify(
-                    {"success": False, "error": "url is required"}
-                ), 400
-            try:
-                url = validate_public_http_url(url)
-            except (OSError, ValueError) as e:
-                return jsonify({"success": False, "error": str(e)}), 400
-            if not name:
-                name = url[:20]
-            custom = self.storage.get("market_custom_mirrors", []) or []
-            custom.append({"name": name, "url": url})
-            self.storage.set("market_custom_mirrors", custom)
-            return jsonify({"success": True, "mirrors": custom})
+            return jsonify({
+                "success": False,
+                "error": "Custom mirrors are disabled",
+            }), 403
 
         @app.route(
             "/api/market/mirrors/custom/<int:idx>", methods=["DELETE"]
         )
         def api_market_mirrors_custom_remove(idx):
-            """删除自定义加速源。"""
-            custom = self.storage.get("market_custom_mirrors", []) or []
-            if idx < 0 or idx >= len(custom):
-                return jsonify(
-                    {"success": False, "error": "index out of range"}
-                ), 400
-            removed = custom.pop(idx)
-            self.storage.set("market_custom_mirrors", custom)
-            return jsonify({"success": True, "removed": removed})
+            return jsonify({
+                "success": False,
+                "error": "Custom mirrors are disabled",
+            }), 403
 
         @app.route("/api/market/plugins/<name>/readme")
         def api_market_plugin_readme(name):

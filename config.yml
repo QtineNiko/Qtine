@@ -30,7 +30,6 @@ plugins:
   allow_dependency_install: false
   autoload: []
   dir: ./plugins
-  marketplace_mirrors: []
   marketplace_url: ''
 security:
   production_mode: true

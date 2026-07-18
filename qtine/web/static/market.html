@@ -167,26 +167,6 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     </div>
   </div>
 </div>
-<div class="modal" id="mirror-modal">
-  <div class="box">
-    <h3>选择加速源</h3>
-    <p style="color:var(--on-sv);font-size:12px">下载插件时使用的 GitHub 加速源，测速后自动选择最快的。</p>
-    <div style="display:flex;gap:8px">
-      <button class="btn" onclick="speedTest()" style="flex:1">开始测速</button>
-      <button class="btn" onclick="useFastest()" id="use-fastest-btn" disabled>使用最快</button>
-    </div>
-    <div class="mirror-list" id="mirror-list"></div>
-    <div style="display:flex;gap:8px">
-      <input type="text" id="custom-mirror-name" placeholder="名称（可选）" style="flex:1">
-      <input type="text" id="custom-mirror-url" placeholder="https://..." style="flex:2">
-      <button class="btn primary" onclick="addCustomMirror()">添加</button>
-    </div>
-    <div class="actions">
-      <button class="btn" onclick="closeMirrorModal()">取消</button>
-      <button class="btn primary" onclick="doInstall()">开始安装</button>
-    </div>
-  </div>
-</div>
 <div class="modal" id="detail-modal">
   <div class="box wide">
     <div class="detail-head">
@@ -213,9 +193,6 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
   var ALL_TAGS=[];
   var ACTIVE_TAGS=[];  // 多选标签
   var KEYWORD='';
-  var MIRRORS=[];
-  var CURRENT_MIRROR='';
-  var FASTEST_MIRROR='';
   var DETAIL_PLUGIN=null;
 
   function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
@@ -267,22 +244,6 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       renderTags();
       render();
     }).catch(function(){toast('加载失败')});
-    loadMirrors();
-  }
-
-  function loadMirrors(){
-    fetch('/api/market/mirrors').then(function(r){return r.json()}).then(function(d){
-      MIRRORS=d.mirrors||[];
-      CURRENT_MIRROR=d.current||'';
-      renderMirrorBar();
-    }).catch(function(){});
-  }
-
-  function renderMirrorBar(){
-    var el=document.getElementById('mirror-current');
-    var cur=MIRRORS.find(function(m){return m.url===CURRENT_MIRROR});
-    var name=cur?cur.name:CURRENT_MIRROR;
-    el.innerHTML='<span class="name">'+name+'</span> <span style="font-size:11px;color:var(--on-sv);font-family:var(--mono)">'+(CURRENT_MIRROR||'')+'</span>';
   }
 
   function renderTags(){
@@ -403,29 +364,14 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     }
   });
 
-  // 安装流程：先选加速源，再下载
-  var PENDING_INSTALL=null;  // {name, btn}
-  function startInstall(name,btn){
-    PENDING_INSTALL={name:name,btn:btn};
-    // 打开加速源选择弹窗
-    loadMirrors();
-    renderMirrorList();
-    document.getElementById('mirror-modal').classList.add('show');
-  }
-
-  function doInstall(){
-    if(!PENDING_INSTALL)return;
-    var name=PENDING_INSTALL.name;
-    var b=PENDING_INSTALL.btn;
-    document.getElementById('mirror-modal').classList.remove('show');
-    if(!confirm('确定要安装 "'+name+'" 吗？')){PENDING_INSTALL=null;return}
+  function startInstall(name,b){
+    if(!confirm('确定要从 GitHub 官方源安装 "'+name+'" 吗？'))return;
     b.disabled=true;b.textContent='安装中...';
-    toast('正在安装 '+name+' ...');
+    toast('正在从 GitHub 官方源安装 '+name+' ...');
     fetch('/api/market/install/'+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
       if(d.success){toast('插件 '+d.name+' 安装成功');load()}
       else{toast('安装失败: '+(d.error||'未知错误'));b.disabled=false;b.textContent='安装'}
     }).catch(function(){toast('安装失败');b.disabled=false;b.textContent='安装'});
-    PENDING_INSTALL=null;
   }
 
   // Source modal
@@ -464,85 +410,6 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       if(d.success){toast('源已保存');closeSourceModal();load()}
       else{toast('保存失败: '+(d.error||'未知错误'))}
     }).catch(function(){toast('保存失败')});
-  };
-
-  // ── 镜像 ────────────────────────────────────────────────────────
-  window.openMirrorModal=function(){
-    renderMirrorList();
-    document.getElementById('mirror-modal').classList.add('show');
-  };
-  window.closeMirrorModal=function(){document.getElementById('mirror-modal').classList.remove('show')};
-
-  function renderMirrorList(){
-    var box=document.getElementById('mirror-list');
-    box.innerHTML='';
-    MIRRORS.forEach(function(m,i){
-      var div=document.createElement('div');
-      div.className='mirror-item'+(m.url===CURRENT_MIRROR?' active':'');
-      var lat=m.latency!=null?m.latency:null;
-      var latCls=lat==null?'':(lat<500?'fast':(lat>2000?'slow':''));
-      var latText=lat==null?'—':(lat>=99999?'超时':lat+'ms');
-      div.innerHTML=
-        '<div style="flex:1"><div class="name">'+m.name+'</div>'+
-        '<div class="url">'+m.url+'</div></div>'+
-        '<div class="lat '+latCls+'">'+latText+'</div>';
-      div.onclick=function(){selectMirror(m.url)};
-      box.appendChild(div);
-    });
-  }
-
-  function selectMirror(url){
-    fetch('/api/market/mirrors/set',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({url:url})
-    }).then(function(r){return r.json()}).then(function(d){
-      if(d.success){
-        CURRENT_MIRROR=d.current;
-        renderMirrorBar();
-        renderMirrorList();
-        toast('已切换加速源');
-      }
-    }).catch(function(){toast('设置失败')});
-  }
-
-  window.speedTest=function(){
-    toast('测速中，请稍候...');
-    fetch('/api/market/mirrors/speedtest').then(function(r){return r.json()}).then(function(d){
-      if(!d||!d.results)return;
-      d.results.forEach(function(r){
-        var m=MIRRORS.find(function(x){return x.url===r.url});
-        if(m)m.latency=r.latency;
-      });
-      FASTEST_MIRROR=d.fastest||'';
-      document.getElementById('use-fastest-btn').disabled=!FASTEST_MIRROR;
-      renderMirrorList();
-      toast('测速完成');
-    }).catch(function(){toast('测速失败')});
-  };
-
-  window.useFastest=function(){
-    if(!FASTEST_MIRROR)return;
-    selectMirror(FASTEST_MIRROR);
-  };
-
-  window.addCustomMirror=function(){
-    var name=document.getElementById('custom-mirror-name').value.trim();
-    var url=document.getElementById('custom-mirror-url').value.trim();
-    if(!url){toast('请输入 URL');return}
-    fetch('/api/market/mirrors/custom',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name:name,url:url})
-    }).then(function(r){return r.json()}).then(function(d){
-      if(d.success){
-        toast('已添加');
-        document.getElementById('custom-mirror-name').value='';
-        document.getElementById('custom-mirror-url').value='';
-        loadMirrors();
-        setTimeout(renderMirrorList,200);
-      }else{toast('添加失败: '+(d.error||''))}
-    }).catch(function(){toast('添加失败')});
   };
 
   // ── 详情弹窗 ────────────────────────────────────────────────────

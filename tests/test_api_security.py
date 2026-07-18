@@ -57,6 +57,23 @@ class ApiSecurityTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_only_official_github_source_is_available(self):
+        headers = {"Authorization": "Bearer " + "a" * 64}
+        response = self.client.get("/api/market/mirrors", headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {
+            "current": "https://github.com",
+            "mirrors": [
+                {"name": "GitHub 官方", "url": "https://github.com"}
+            ],
+        })
+        response = self.client.post(
+            "/api/market/mirrors/set",
+            headers=headers,
+            json={"url": "https://example.com"},
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_security_headers_are_set(self):
         response = self.client.get("/health")
         self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")

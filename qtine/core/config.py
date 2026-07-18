@@ -58,7 +58,6 @@ class Config:
                 "autoload": [],
                 "allow_dependency_install": False,
                 "marketplace_url": "",
-                "marketplace_mirrors": [],
             },
             "webui": {
                 "enabled": True,
