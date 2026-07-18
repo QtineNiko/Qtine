@@ -34,6 +34,20 @@ UPLOAD_DIR = os.path.join("data", "uploads")
 MAX_UPLOAD_MB = 50
 ALLOWED_EXTENSIONS = {"zip"}
 
+# 默认 GitHub 加速镜像（10 个）
+DEFAULT_GITHUB_MIRRORS = [
+    {"name": "GitHub 官方", "url": "https://github.com"},
+    {"name": "ghproxy", "url": "https://ghproxy.com"},
+    {"name": "99988866", "url": "https://gh.api.99988866.xyz"},
+    {"name": "mirror.ghproxy", "url": "https://mirror.ghproxy.com"},
+    {"name": "gh-proxy", "url": "https://gh-proxy.com"},
+    {"name": "xcxgw", "url": "https://gh.xcxgw.com"},
+    {"name": "ghps", "url": "https://ghps.cc"},
+    {"name": "d-ai workers", "url": "https://gh.d-ai.workers.dev"},
+    {"name": "llkk", "url": "https://gh.llkk.cc"},
+    {"name": "gitmirror", "url": "https://hub.gitmirror.com"},
+]
+
 # Built-in marketplace demo entries. Used as fallback when no remote
 # marketplace source is configured (or the configured source is unreachable),
 # so the WebUI can still render the plugin market page out of the box.
@@ -1144,9 +1158,7 @@ class QtineApp:
                     continue
 
             if using_fallback:
-                # Deep copy the built-in demo list so callers can't mutate
-                # the module-level constant via the response.
-                plugins = [dict(p) for p in BUILTIN_MARKET_PLUGINS]
+                plugins = []
 
             # Annotate installed state.
             for p in plugins:
@@ -1241,6 +1253,17 @@ class QtineApp:
                     "name": name,
                 }), 400
 
+            # Apply mirror if configured and download_url is from GitHub
+            mirror_url = self.storage.get("market_mirror", "") or ""
+            if (
+                mirror_url
+                and "github.com" in download_url
+                and mirror_url != "https://github.com"
+            ):
+                download_url = download_url.replace(
+                    "https://github.com", mirror_url.rstrip("/")
+                )
+
             # Download to data/uploads/<name>.zip
             try:
                 import urllib.request
@@ -1263,6 +1286,167 @@ class QtineApp:
             return jsonify(
                 {"success": False, "error": "Plugin import failed"}
             ), 400
+
+        # ── marketplace: mirrors / speedtest / readme ──────────────
+
+        @app.route("/api/market/mirrors")
+        def api_market_mirrors():
+            """返回 GitHub 加速镜像列表，含用户自定义的。"""
+            custom = self.storage.get("market_custom_mirrors", []) or []
+            current = self.storage.get(
+                "market_mirror", "https://github.com"
+            ) or "https://github.com"
+            all_mirrors = list(DEFAULT_GITHUB_MIRRORS) + [
+                {"name": m.get("name", "自定义"), "url": m.get("url", "")}
+                for m in custom
+                if m.get("url")
+            ]
+            return jsonify({
+                "mirrors": all_mirrors,
+                "current": current,
+            })
+
+        @app.route("/api/market/mirrors/set", methods=["POST"])
+        def api_market_mirrors_set():
+            """设置当前使用的加速源。"""
+            data = request.get_json(silent=True) or {}
+            url = (data.get("url") or "").strip()
+            if not url:
+                return jsonify(
+                    {"success": False, "error": "url is required"}
+                ), 400
+            self.storage.set("market_mirror", url)
+            return jsonify({"success": True, "current": url})
+
+        @app.route("/api/market/mirrors/speedtest")
+        def api_market_mirrors_speedtest():
+            """对所有镜像进行测速，返回最快的。"""
+            import urllib.request
+
+            mirrors = DEFAULT_GITHUB_MIRRORS[:]
+            custom = self.storage.get("market_custom_mirrors", []) or []
+            for m in custom:
+                if m.get("url"):
+                    mirrors.append(
+                        {"name": m.get("name", "自定义"), "url": m["url"]}
+                    )
+
+            results = []
+            test_path = "/QtineNiko/Qtine"
+            for m in mirrors:
+                url = m["url"].rstrip("/") + test_path
+                start = time.time()
+                try:
+                    req = urllib.request.Request(url, method="HEAD")
+                    with urllib.request.urlopen(req, timeout=5) as r:
+                        latency = (time.time() - start) * 1000
+                        results.append({
+                            "name": m["name"],
+                            "url": m["url"],
+                            "latency": round(latency, 0),
+                        })
+                except Exception:
+                    results.append({
+                        "name": m["name"],
+                        "url": m["url"],
+                        "latency": 99999,
+                    })
+
+            results.sort(key=lambda x: x["latency"])
+            fastest = (
+                results[0]["url"]
+                if results and results[0]["latency"] < 99999
+                else None
+            )
+            return jsonify({"results": results, "fastest": fastest})
+
+        @app.route("/api/market/mirrors/custom", methods=["POST"])
+        def api_market_mirrors_custom_add():
+            """添加自定义加速源。"""
+            data = request.get_json(silent=True) or {}
+            name = (data.get("name") or "").strip()
+            url = (data.get("url") or "").strip()
+            if not url:
+                return jsonify(
+                    {"success": False, "error": "url is required"}
+                ), 400
+            if not name:
+                name = url[:20]
+            custom = self.storage.get("market_custom_mirrors", []) or []
+            custom.append({"name": name, "url": url})
+            self.storage.set("market_custom_mirrors", custom)
+            return jsonify({"success": True, "mirrors": custom})
+
+        @app.route(
+            "/api/market/mirrors/custom/<int:idx>", methods=["DELETE"]
+        )
+        def api_market_mirrors_custom_remove(idx):
+            """删除自定义加速源。"""
+            custom = self.storage.get("market_custom_mirrors", []) or []
+            if idx < 0 or idx >= len(custom):
+                return jsonify(
+                    {"success": False, "error": "index out of range"}
+                ), 400
+            removed = custom.pop(idx)
+            self.storage.set("market_custom_mirrors", custom)
+            return jsonify({"success": True, "removed": removed})
+
+        @app.route("/api/market/plugins/<name>/readme")
+        def api_market_plugin_readme(name):
+            """获取插件 README。
+
+            优先从市场源拉取；源不可用时返回空字符串。
+            """
+            source_url = (
+                self.config.get("plugins.marketplace_url", "") or ""
+            ).strip()
+            readme = ""
+            if source_url:
+                try:
+                    import urllib.request
+                    import json as _json
+
+                    url = (
+                        source_url.rstrip("/")
+                        + f"/plugins/{name}/readme"
+                    )
+                    with urllib.request.urlopen(
+                        url, timeout=10
+                    ) as r:
+                        d = _json.loads(
+                            r.read().decode("utf-8", "ignore")
+                        )
+                        readme = d.get("readme", "") or ""
+                except Exception as e:
+                    self.logger.warning(
+                        f"Fetch readme for {name} failed: {e}"
+                    )
+            return jsonify({"name": name, "readme": readme})
+
+        @app.route("/api/market/plugins/<name>/detail")
+        def api_market_plugin_detail(name):
+            """获取插件详情（含 readme）。"""
+            source_url = (
+                self.config.get("plugins.marketplace_url", "") or ""
+            ).strip()
+            if source_url:
+                try:
+                    import urllib.request
+                    import json as _json
+
+                    url = source_url.rstrip("/") + f"/plugins/{name}"
+                    with urllib.request.urlopen(
+                        url, timeout=10
+                    ) as r:
+                        d = _json.loads(
+                            r.read().decode("utf-8", "ignore")
+                        )
+                        return jsonify(d)
+                except Exception as e:
+                    self.logger.warning(
+                        f"Fetch detail for {name} failed: {e}"
+                    )
+            return jsonify({"error": "not found"}), 404
 
         # ── adapters CRUD ──────────────────────────────────────────
 

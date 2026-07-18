@@ -29,9 +29,8 @@ logging:
 plugins:
   autoload: []
   dir: ./plugins
-  marketplace_mirrors:
-  - https://mirror.qtine.dev/api
-  marketplace_url: https://qtine-market.example.com/api
+  marketplace_mirrors: []
+  marketplace_url: http://xingruo.chat:2456/api
 security:
   blacklist:
     enabled: true

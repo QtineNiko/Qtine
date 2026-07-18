@@ -51,12 +51,35 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
 .snackbar.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:60}
 .modal.show{display:flex}
-.modal .box{background:var(--sf);border:1px solid var(--olv);border-radius:var(--rad-l);padding:24px;width:90%;max-width:480px;display:flex;flex-direction:column;gap:14px}
+.modal .box{background:var(--sf);border:1px solid var(--olv);border-radius:var(--rad-l);padding:24px;width:90%;max-width:480px;display:flex;flex-direction:column;gap:14px;max-height:80vh;overflow-y:auto}
+.modal .box.wide{max-width:720px}
 .modal h3{font:500 18px/24px Roboto,sans-serif}
 .modal p{font-size:13px;color:var(--on-sv);line-height:1.6}
 .modal input{padding:10px 14px;border-radius:var(--rad-s);border:1px solid var(--ol);background:var(--sfc);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;outline:none}
 .modal input:focus{border-color:var(--p)}
 .modal .actions{display:flex;justify-content:flex-end;gap:8px}
+.mirror-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto}
+.mirror-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--rad-s);background:var(--sfc);border:1px solid var(--ol);cursor:pointer;transition:all var(--tr)}
+.mirror-item:hover{border-color:var(--p)}
+.mirror-item.active{border-color:var(--p);background:rgba(208,188,255,.1)}
+.mirror-item .name{flex:1;font-size:13px}
+.mirror-item .url{font-size:11px;color:var(--on-sv);font-family:var(--mono)}
+.mirror-item .lat{font-size:12px;color:var(--on-sv)}
+.mirror-item .lat.fast{color:var(--su)}
+.mirror-item .lat.slow{color:var(--e)}
+.detail-head{display:flex;gap:14px;align-items:flex-start}
+.detail-head .icon{width:56px;height:56px;border-radius:var(--rad-s);background:var(--pc);color:#EADDFF;display:flex;align-items:center;justify-content:center;font:500 24px/28px Roboto,sans-serif;flex-shrink:0;text-transform:uppercase}
+.detail-head h2{font:500 20px/28px Roboto,sans-serif}
+.detail-head .meta{font-size:12px;color:var(--on-sv);margin-top:4px}
+.readme-box{background:var(--sfc);border:1px solid var(--ol);border-radius:var(--rad-s);padding:16px;max-height:400px;overflow-y:auto;font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.readme-box h1,.readme-box h2,.readme-box h3{margin-top:12px;margin-bottom:8px}
+.readme-box code{background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px}
+.readme-box pre{background:var(--bg);padding:12px;border-radius:var(--rad-s);overflow-x:auto}
+.readme-box a{color:var(--p)}
+.mirror-bar{display:flex;align-items:center;gap:10px;background:var(--sf);border:1px solid var(--olv);border-radius:var(--rad-m);padding:10px 16px}
+.mirror-bar .label{font:500 13px/18px Roboto,sans-serif;color:var(--on-sv);flex-shrink:0}
+.mirror-bar .current{flex:1;font-size:13px;color:var(--on-s);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mirror-bar .current .name{color:var(--p);font-weight:500}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--olv);border-radius:3px}
 @media(max-width:768px){.nav{width:56px}.nav-item{width:48px;padding:8px 1px;font-size:10px}.grid{grid-template-columns:1fr}.main{padding:12px}}
 </style></head><body>
@@ -86,7 +109,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     <div class="source-bar">
       <span class="label">源：</span>
       <span class="url" id="src-url">加载中...</span>
-      <span class="chip warn" id="src-chip">本地示例</span>
+      <span class="chip warn" id="src-chip">默认插件源</span>
       <button class="btn" onclick="openSourceModal()">修改</button>
     </div>
     <div class="toolbar">
@@ -108,12 +131,56 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     </div>
   </div>
 </div>
+<div class="modal" id="mirror-modal">
+  <div class="box">
+    <h3>选择加速源</h3>
+    <p style="color:var(--on-sv);font-size:12px">下载插件时使用的 GitHub 加速源，测速后自动选择最快的。</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="speedTest()" style="flex:1">开始测速</button>
+      <button class="btn" onclick="useFastest()" id="use-fastest-btn" disabled>使用最快</button>
+    </div>
+    <div class="mirror-list" id="mirror-list"></div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="custom-mirror-name" placeholder="名称（可选）" style="flex:1">
+      <input type="text" id="custom-mirror-url" placeholder="https://..." style="flex:2">
+      <button class="btn primary" onclick="addCustomMirror()">添加</button>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="closeMirrorModal()">取消</button>
+      <button class="btn primary" onclick="doInstall()">开始安装</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="detail-modal">
+  <div class="box wide">
+    <div class="detail-head">
+      <div class="icon" id="detail-icon">?</div>
+      <div style="flex:1">
+        <h2 id="detail-name">插件名</h2>
+        <div class="meta" id="detail-meta">v0.0.0 · 作者</div>
+      </div>
+      <button class="btn primary" id="detail-install-btn">安装</button>
+    </div>
+    <p id="detail-desc" style="color:var(--on-s)">描述</p>
+    <div class="tags" id="detail-tags"></div>
+    <h3 style="font-size:14px;margin-top:4px">README</h3>
+    <div class="readme-box" id="detail-readme">加载中...</div>
+    <div class="actions">
+      <a id="detail-homepage" href="#" target="_blank" class="btn" style="text-decoration:none;margin-right:auto">访问主页 →</a>
+      <button class="btn" onclick="closeDetailModal()">关闭</button>
+    </div>
+  </div>
+</div>
 <script>
 (function(){
   var ALL_PLUGINS=[];
   var ALL_TAGS=[];
   var ACTIVE_TAG='';
   var KEYWORD='';
+  var MIRRORS=[];
+  var CURRENT_MIRROR='';
+  var FASTEST_MIRROR='';
+  var DETAIL_PLUGIN=null;
 
   function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
   function toast(m){var s=document.getElementById('sb');s.textContent=m;s.classList.add('show');clearTimeout(s._t);s._t=setTimeout(function(){s.classList.remove('show')},3000)}
@@ -130,7 +197,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       var chip=document.getElementById('src-chip');
       url.textContent=d.source||'（未配置，使用内置示例）';
       if(d.using_fallback){
-        chip.textContent='本地示例';
+        chip.textContent='默认插件源';
         chip.className='chip warn';
       }else{
         chip.textContent='已连接源';
@@ -140,13 +207,28 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
         p._tags=(p.tags||[]).slice();
         return p;
       });
-      // Collect tags
       var tagSet={};
       ALL_PLUGINS.forEach(function(p){(p._tags||[]).forEach(function(t){tagSet[t]=1})});
       ALL_TAGS=Object.keys(tagSet).sort();
       renderTags();
       render();
     }).catch(function(){toast('加载失败')});
+    loadMirrors();
+  }
+
+  function loadMirrors(){
+    fetch('/api/market/mirrors').then(function(r){return r.json()}).then(function(d){
+      MIRRORS=d.mirrors||[];
+      CURRENT_MIRROR=d.current||'';
+      renderMirrorBar();
+    }).catch(function(){});
+  }
+
+  function renderMirrorBar(){
+    var el=document.getElementById('mirror-current');
+    var cur=MIRRORS.find(function(m){return m.url===CURRENT_MIRROR});
+    var name=cur?cur.name:CURRENT_MIRROR;
+    el.innerHTML='<span class="name">'+name+'</span> <span style="font-size:11px;color:var(--on-sv);font-family:var(--mono)">'+(CURRENT_MIRROR||'')+'</span>';
   }
 
   function renderTags(){
@@ -183,7 +265,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       return;
     }
     list.forEach(function(p){
-      var c=document.createElement('div');c.className='card';
+      var c=document.createElement('div');c.className='card';c.style.cursor='pointer';
       var initial=(p.name||'?').charAt(0).toUpperCase();
       var tagsHtml=(p._tags||[]).map(function(t){return '<span class="chip">'+t+'</span>'}).join('');
       var dl=p.downloads||0;
@@ -201,8 +283,12 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
         '<div class="desc">'+(p.description||'（无描述）')+'</div>'+
         '<div class="tags">'+tagsHtml+'</div>'+
         '<div class="footer"><div class="stats"><span title="下载量">↓ '+dlText+'</span>'+
-        (p.homepage?'<a href="'+p.homepage+'" target="_blank" style="color:var(--p);text-decoration:none;font-size:12px">主页 →</a>':'')+
+        (p.homepage?'<a href="'+p.homepage+'" target="_blank" style="color:var(--p);text-decoration:none;font-size:12px" onclick="event.stopPropagation()">主页 →</a>':'')+
         '</div><div class="actions">'+btnHtml+'</div></div>';
+      c.addEventListener('click',function(e){
+        if(e.target.closest('button')||e.target.closest('a'))return;
+        openDetail(p);
+      });
       grid.appendChild(c);
     });
   }
@@ -211,15 +297,34 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     var b=e.target.closest('button');if(!b||!b.dataset.action)return;
     if(b.dataset.action==='install'){
       var name=b.dataset.name;
-      if(!confirm('确定要从市场安装 "'+name+'" 吗？'))return;
-      b.disabled=true;b.textContent='安装中...';
-      toast('正在安装 '+name+' ...');
-      fetch('/api/market/install/'+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-        if(d.success){toast('插件 '+d.name+' 安装成功');load()}
-        else{toast('安装失败: '+(d.error||'未知错误'));b.disabled=false;b.textContent='安装'}
-      }).catch(function(){toast('安装失败');b.disabled=false;b.textContent='安装'});
+      startInstall(name,b);
     }
   });
+
+  // 安装流程：先选加速源，再下载
+  var PENDING_INSTALL=null;  // {name, btn}
+  function startInstall(name,btn){
+    PENDING_INSTALL={name:name,btn:btn};
+    // 打开加速源选择弹窗
+    loadMirrors();
+    renderMirrorList();
+    document.getElementById('mirror-modal').classList.add('show');
+  }
+
+  function doInstall(){
+    if(!PENDING_INSTALL)return;
+    var name=PENDING_INSTALL.name;
+    var b=PENDING_INSTALL.btn;
+    document.getElementById('mirror-modal').classList.remove('show');
+    if(!confirm('确定要安装 "'+name+'" 吗？')){PENDING_INSTALL=null;return}
+    b.disabled=true;b.textContent='安装中...';
+    toast('正在安装 '+name+' ...');
+    fetch('/api/market/install/'+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+      if(d.success){toast('插件 '+d.name+' 安装成功');load()}
+      else{toast('安装失败: '+(d.error||'未知错误'));b.disabled=false;b.textContent='安装'}
+    }).catch(function(){toast('安装失败');b.disabled=false;b.textContent='安装'});
+    PENDING_INSTALL=null;
+  }
 
   // Source modal
   window.openSourceModal=function(){
@@ -236,6 +341,147 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       else{toast('保存失败: '+(d.error||'未知错误'))}
     }).catch(function(){toast('保存失败')});
   };
+
+  // ── 镜像 ────────────────────────────────────────────────────────
+  window.openMirrorModal=function(){
+    renderMirrorList();
+    document.getElementById('mirror-modal').classList.add('show');
+  };
+  window.closeMirrorModal=function(){document.getElementById('mirror-modal').classList.remove('show')};
+
+  function renderMirrorList(){
+    var box=document.getElementById('mirror-list');
+    box.innerHTML='';
+    MIRRORS.forEach(function(m,i){
+      var div=document.createElement('div');
+      div.className='mirror-item'+(m.url===CURRENT_MIRROR?' active':'');
+      var lat=m.latency!=null?m.latency:null;
+      var latCls=lat==null?'':(lat<500?'fast':(lat>2000?'slow':''));
+      var latText=lat==null?'—':(lat>=99999?'超时':lat+'ms');
+      div.innerHTML=
+        '<div style="flex:1"><div class="name">'+m.name+'</div>'+
+        '<div class="url">'+m.url+'</div></div>'+
+        '<div class="lat '+latCls+'">'+latText+'</div>';
+      div.onclick=function(){selectMirror(m.url)};
+      box.appendChild(div);
+    });
+  }
+
+  function selectMirror(url){
+    fetch('/api/market/mirrors/set',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url:url})
+    }).then(function(r){return r.json()}).then(function(d){
+      if(d.success){
+        CURRENT_MIRROR=d.current;
+        renderMirrorBar();
+        renderMirrorList();
+        toast('已切换加速源');
+      }
+    }).catch(function(){toast('设置失败')});
+  }
+
+  window.speedTest=function(){
+    toast('测速中，请稍候...');
+    fetch('/api/market/mirrors/speedtest').then(function(r){return r.json()}).then(function(d){
+      if(!d||!d.results)return;
+      d.results.forEach(function(r){
+        var m=MIRRORS.find(function(x){return x.url===r.url});
+        if(m)m.latency=r.latency;
+      });
+      FASTEST_MIRROR=d.fastest||'';
+      document.getElementById('use-fastest-btn').disabled=!FASTEST_MIRROR;
+      renderMirrorList();
+      toast('测速完成');
+    }).catch(function(){toast('测速失败')});
+  };
+
+  window.useFastest=function(){
+    if(!FASTEST_MIRROR)return;
+    selectMirror(FASTEST_MIRROR);
+  };
+
+  window.addCustomMirror=function(){
+    var name=document.getElementById('custom-mirror-name').value.trim();
+    var url=document.getElementById('custom-mirror-url').value.trim();
+    if(!url){toast('请输入 URL');return}
+    fetch('/api/market/mirrors/custom',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:name,url:url})
+    }).then(function(r){return r.json()}).then(function(d){
+      if(d.success){
+        toast('已添加');
+        document.getElementById('custom-mirror-name').value='';
+        document.getElementById('custom-mirror-url').value='';
+        loadMirrors();
+        setTimeout(renderMirrorList,200);
+      }else{toast('添加失败: '+(d.error||''))}
+    }).catch(function(){toast('添加失败')});
+  };
+
+  // ── 详情弹窗 ────────────────────────────────────────────────────
+  function openDetail(p){
+    DETAIL_PLUGIN=p;
+    document.getElementById('detail-icon').textContent=(p.name||'?').charAt(0).toUpperCase();
+    document.getElementById('detail-name').textContent=p.name||'';
+    document.getElementById('detail-meta').textContent='v'+(p.version||'?')+' · '+(p.author||'未知')+(p.size?' · '+p.size:'');
+    document.getElementById('detail-desc').textContent=p.description||'（无描述）';
+    var tagsEl=document.getElementById('detail-tags');
+    tagsEl.innerHTML=(p._tags||[]).map(function(t){return '<span class="chip">'+t+'</span>'}).join('');
+    var hp=document.getElementById('detail-homepage');
+    if(p.homepage){hp.style.display='';hp.href=p.homepage}else{hp.style.display='none'}
+    var btn=document.getElementById('detail-install-btn');
+    if(p.installed){btn.disabled=true;btn.textContent='已安装'}
+    else{btn.disabled=false;btn.textContent='安装';btn.onclick=function(){
+      closeDetailModal();
+      startInstall(p.name,btn);
+    }}
+    document.getElementById('detail-readme').textContent='加载中...';
+    document.getElementById('detail-modal').classList.add('show');
+    fetch('/api/market/plugins/'+encodeURIComponent(p.name)+'/readme').then(function(r){return r.json()}).then(function(d){
+      if(d&&d.readme){
+        document.getElementById('detail-readme').innerHTML=formatMarkdown(d.readme);
+      }else{
+        document.getElementById('detail-readme').textContent='暂无 README';
+      }
+    }).catch(function(){document.getElementById('detail-readme').textContent='加载失败'});
+  }
+  window.closeDetailModal=function(){document.getElementById('detail-modal').classList.remove('show')};
+
+  function formatMarkdown(text){
+    if(!text)return '';
+    var lines=text.split('\n');
+    var out=[];
+    var inCode=false;
+    for(var i=0;i<lines.length;i++){
+      var line=lines[i];
+      if(line.startsWith('```')){
+        inCode=!inCode;
+        out.push(inCode?'<pre>':'</pre>');
+        continue;
+      }
+      if(inCode){out.push(escapeHtml(line));continue}
+      if(line.startsWith('# ')){out.push('<h1>'+inlineMd(line.slice(2))+'</h1>')}
+      else if(line.startsWith('## ')){out.push('<h2>'+inlineMd(line.slice(3))+'</h2>')}
+      else if(line.startsWith('### ')){out.push('<h3>'+inlineMd(line.slice(4))+'</h3>')}
+      else if(line.startsWith('- ')){out.push('<div>• '+inlineMd(line.slice(2))+'</div>')}
+      else if(line.trim()===''){out.push('<br>')}
+      else{out.push('<div>'+inlineMd(line)+'</div>')}
+    }
+    return out.join('\n');
+  }
+  function inlineMd(s){
+    s=escapeHtml(s);
+    s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+    s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+    s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+    return s;
+  }
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
 
   load();
 })();
