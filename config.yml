@@ -30,7 +30,7 @@ plugins:
   autoload: []
   dir: ./plugins
   marketplace_mirrors: []
-  marketplace_url: http://xingruo.chat:2456/api
+  marketplace_url: http://xingruo.chat:2456/api/plugins
 security:
   blacklist:
     enabled: true

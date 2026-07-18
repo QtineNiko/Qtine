@@ -1148,6 +1148,8 @@ class QtineApp:
                         ) or []
                     else:
                         plugins = []
+                    if isinstance(plugins, dict):
+                        plugins = plugins.get("plugins") or []
                     plugins = plugins if isinstance(plugins, list) else []
                     using_fallback = False
                     break
