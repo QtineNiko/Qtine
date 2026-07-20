@@ -59,6 +59,25 @@ class BaseAdapter(ABC):
                 self.logger.error(f"Adapter event callback error: {e}")
 
     def _update_status(self, status: AdapterStatus, account_id: str = ""):
+        previous = self._adapter_info.status
         self._adapter_info.status = status
         if account_id:
             self._adapter_info.account_id = account_id
+        if previous == status or self.bot is None:
+            return
+        bus = getattr(self.bot, "event_bus", None)
+        if bus is None:
+            return
+        if status == AdapterStatus.CONNECTED:
+            bus.publish(
+                "adapter.connected",
+                {
+                    "adapter": self.name,
+                    "self_id": self._adapter_info.account_id,
+                },
+            )
+        elif status == AdapterStatus.DISCONNECTED:
+            bus.publish(
+                "adapter.disconnected",
+                {"adapter": self.name},
+            )

@@ -85,6 +85,7 @@ class Plugin(BasePlugin):
             # 通用消息监听
             if getattr(method, _filter.ATTR_LISTENER, False):
                 self._sdk_listeners.append(method)
+                self.register_listener(self._wrap_listener(method))
 
             # 事件监听
             event_name = getattr(method, _filter.ATTR_EVENT, None)
@@ -99,12 +100,13 @@ class Plugin(BasePlugin):
         bus = getattr(bot, "event_bus", None) if bot else None
         if bus is None:
             return
-        subscribe = getattr(bus, "subscribe", None) or getattr(bus, "on", None)
-        if subscribe is None:
+        if not callable(getattr(bus, "subscribe", None)):
             return
         for event_name, handler in self._sdk_event_handlers:
             try:
-                subscribe(event_name, self._wrap_event_handler(handler))
+                self.subscribe_event(
+                    event_name, self._wrap_event_handler(handler)
+                )
             except Exception as e:
                 self.logger.error(
                     f"[SDK] Failed to subscribe event {event_name}: {e}"
@@ -118,28 +120,43 @@ class Plugin(BasePlugin):
             return Context(pipeline_ctx=raw, bot=self.bot)
         return Context(message=raw, bot=self.bot)
 
+    @staticmethod
+    def _accepts_args(method: Callable, count: int) -> bool:
+        try:
+            inspect.signature(method).bind(*([None] * count))
+            return True
+        except (TypeError, ValueError):
+            return False
+
     def _wrap_command_handler(self, method: Callable) -> Callable:
+        accepts_args = self._accepts_args(method, 2)
+
         def _handler(pipeline_ctx, args):
             ctx = self._build_ctx(pipeline_ctx)
-            try:
-                result = method(ctx, args)
-            except TypeError:
-                # 允许开发者省略 args 参数
-                result = method(ctx)
-            return result
+            if accepts_args:
+                return method(ctx, args)
+            return method(ctx)
 
         _handler.__name__ = getattr(method, "__name__", "command_handler")
         return _handler
 
     def _wrap_regex_handler(self, method: Callable) -> Callable:
+        accepts_match = self._accepts_args(method, 2)
+
         def _handler(pipeline_ctx, match):
             ctx = self._build_ctx(pipeline_ctx)
-            try:
+            if accepts_match:
                 return method(ctx, match)
-            except TypeError:
-                return method(ctx)
+            return method(ctx)
 
         _handler.__name__ = getattr(method, "__name__", "regex_handler")
+        return _handler
+
+    def _wrap_listener(self, method: Callable) -> Callable:
+        def _handler(message):
+            return method(Context(message=message, bot=self.bot))
+
+        _handler.__name__ = getattr(method, "__name__", "message_listener")
         return _handler
 
     def _wrap_keyword_handler(self, method: Callable) -> Callable:
@@ -186,17 +203,10 @@ class Plugin(BasePlugin):
             return False
 
     def dispatch_listeners(self, message) -> None:
-        """内部：把每条消息广播给 `@filter.on_message` 监听器。
+        """内部：把每条消息广播给 `@filter.on_message` 监听器。"""
+        super().dispatch_listeners(message)
 
-        由核心在 handler 阶段前后择机调用；未接入时不影响命令注册。
-        """
-        if not self._sdk_listeners:
-            return
-        ctx = Context(message=message, bot=self.bot)
-        for listener in self._sdk_listeners:
-            try:
-                listener(ctx)
-            except Exception as e:
-                self.logger.error(
-                    f"[{self.name}] listener error: {e}"
-                )
+    def cleanup(self) -> None:
+        super().cleanup()
+        self._sdk_listeners.clear()
+        self._sdk_event_handlers.clear()

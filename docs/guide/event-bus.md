@@ -59,8 +59,8 @@ class MyPlugin(BasePlugin):
 
     def __init__(self, bot=None):
         super().__init__(bot)
-        # 订阅消息事件
-        self.bot.event_bus.subscribe(
+        # 订阅消息事件，自动纳入插件生命周期
+        self.subscribe_event(
             "message.received", self.on_message
         )
 
@@ -69,16 +69,8 @@ class MyPlugin(BasePlugin):
         # 自定义逻辑
         pass
 
-    def on_unload(self):
-        # 卸载时取消订阅，避免内存泄漏
-        self.bot.event_bus.unsubscribe(
-            "message.received", self.on_message
-        )
 ```
-
-::: warning
-插件卸载时务必取消订阅，否则会导致回调引用旧插件实例，引发内存泄漏和错误。
-:::
+`subscribe_event()` 会在插件卸载时自动取消订阅。直接调用 `event_bus.subscribe()` 时，必须保存返回的订阅 ID，并在 `on_unload()` 中调用 `unsubscribe(subscription_id)`。
 
 ## 异步处理
 

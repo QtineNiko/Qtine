@@ -333,6 +333,11 @@ class QtineBot:
             )
             return
 
+        self.event_bus.publish(
+            "message.received", {"message": message}
+        )
+        self.plugin_manager.dispatch_message_listeners(message)
+
         try:
             response = self.pipeline.process(message)
         except Exception as e:

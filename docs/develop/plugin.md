@@ -170,8 +170,8 @@ class ExamplePlugin(Plugin):
 - `@filter.command(name, aliases=None, permission="user")`：命令。
 - `@filter.regex(pattern)`：正则，回调接收 `ctx, match`。
 - `@filter.keyword(keywords)`：关键词，回调接收 `ctx`。
-- `@filter.on_event(event)`：事件总线监听，回调接收 `data`。
-- `@filter.on_message()`：当前 SDK 保留了该声明接口，但核心消息管道尚未自动调用监听器；当前版本不要依赖它实现业务逻辑。
+- `@filter.on_event(event)`：事件总线监听，回调接收 `data`，插件卸载时自动取消订阅。
+- `@filter.on_message()`：每条通过黑名单检查的消息都会在管道处理前触发，回调接收 `ctx`。
 
 ### SDK Context
 

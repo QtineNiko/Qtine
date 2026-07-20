@@ -33,6 +33,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import zipfile
 from typing import Dict, List, Optional
 
@@ -61,6 +62,14 @@ class PluginManager:
         self.logger = get_logger()
         self.bot = None
         self.allow_dependency_install = False
+        self._index_lock = threading.RLock()
+        self._lifecycle_lock = threading.RLock()
+        self._indexes_dirty = True
+        self._command_index = {}
+        self._max_command_tokens = 0
+        self._regex_index = []
+        self._keyword_index = []
+        self._listener_index = []
     def set_bot(self, bot):
         self.bot = bot
         self.allow_dependency_install = bool(
@@ -70,6 +79,49 @@ class PluginManager:
     def set_plugin_dir(self, path: str):
         self._plugin_dir = path
         os.makedirs(path, exist_ok=True)
+
+    def _mark_indexes_dirty(self) -> None:
+        with self._index_lock:
+            self._indexes_dirty = True
+
+    def _ensure_indexes(self) -> None:
+        with self._index_lock:
+            if not self._indexes_dirty:
+                return
+            command_index = {}
+            max_command_tokens = 0
+            regex_index = []
+            keyword_index = []
+            listener_index = []
+            for plugin in self._plugins.values():
+                if not plugin.enabled:
+                    continue
+                for command, aliases, permission, handler in (
+                    plugin.get_all_command_handlers()
+                ):
+                    for name in [command, *(aliases or [])]:
+                        key = tuple(str(name).strip().split())
+                        if key:
+                            command_index.setdefault(key, []).append(
+                                (plugin, handler, permission)
+                            )
+                            max_command_tokens = max(
+                                max_command_tokens, len(key)
+                            )
+                for pattern, handler in plugin.get_all_regex_handlers():
+                    regex_index.append((plugin, pattern, handler))
+                for keywords, handler in plugin.get_all_keyword_handlers():
+                    for keyword in keywords:
+                        if keyword:
+                            keyword_index.append((plugin, keyword, handler))
+                if plugin.has_listeners():
+                    listener_index.append(plugin)
+            self._command_index = command_index
+            self._max_command_tokens = max_command_tokens
+            self._regex_index = regex_index
+            self._keyword_index = keyword_index
+            self._listener_index = listener_index
+            self._indexes_dirty = False
 
     # ── builtin registration ────────────────────────────────────────
 
@@ -505,150 +557,206 @@ class PluginManager:
     # ── register ────────────────────────────────────────────────────
 
     def _register(self, plugin: BasePlugin):
-        self._plugins[plugin.name] = plugin
-        try:
-            plugin.on_load()
-            plugin.on_enable()
-        except Exception as e:
-            self.logger.error(f"Plugin [{plugin.name}] enable error: {e}")
-        self.logger.info(
-            f"Plugin registered: {plugin.name} v{plugin.version}"
-        )
+        with self._lifecycle_lock:
+            old_plugin = self.get(plugin.name)
+            if old_plugin is not None and old_plugin is not plugin:
+                try:
+                    old_plugin.on_disable()
+                    old_plugin.on_unload()
+                except Exception as e:
+                    self.logger.error(
+                        f"Plugin [{plugin.name}] replacement error: {e}"
+                    )
+                finally:
+                    try:
+                        old_plugin.cleanup()
+                    except Exception as e:
+                        self.logger.error(
+                            f"Plugin [{plugin.name}] replacement cleanup error: {e}"
+                        )
+            with self._index_lock:
+                self._plugins[plugin.name] = plugin
+                self._indexes_dirty = True
+            try:
+                plugin.on_load()
+                plugin.on_enable()
+            except Exception as e:
+                self.logger.error(
+                    f"Plugin [{plugin.name}] enable error: {e}"
+                )
+            self._mark_indexes_dirty()
+            if self.bot and getattr(self.bot, "event_bus", None):
+                self.bot.event_bus.publish(
+                    "plugin.loaded", {"plugin": plugin.name}
+                )
+            self.logger.info(
+                f"Plugin registered: {plugin.name} v{plugin.version}"
+            )
 
     # ── lifecycle ───────────────────────────────────────────────────
 
     def unload(self, name: str) -> bool:
-        plugin = self._plugins.get(name)
-        if plugin is None:
-            return False
-        if plugin.plugin_type == PluginType.BUILTIN:
-            self.logger.warning(f"Cannot unload builtin plugin: {name}")
-            return False
-        try:
-            plugin.on_disable()
-            plugin.on_unload()
-        except Exception as e:
-            self.logger.error(f"Plugin [{name}] unload error: {e}")
-        del self._plugins[name]
-        self._plugin_sources.pop(name, None)
-        self.logger.info(f"Plugin unloaded: {name}")
-        return True
+        with self._lifecycle_lock:
+            plugin = self.get(name)
+            if plugin is None:
+                return False
+            if plugin.plugin_type == PluginType.BUILTIN:
+                self.logger.warning(f"Cannot unload builtin plugin: {name}")
+                return False
+            try:
+                plugin.on_disable()
+                plugin.on_unload()
+            except Exception as e:
+                self.logger.error(f"Plugin [{name}] unload error: {e}")
+            finally:
+                try:
+                    plugin.cleanup()
+                except Exception as e:
+                    self.logger.error(f"Plugin [{name}] cleanup error: {e}")
+            with self._index_lock:
+                if self._plugins.get(name) is not plugin:
+                    return False
+                del self._plugins[name]
+                self._plugin_sources.pop(name, None)
+                self._indexes_dirty = True
+            self.logger.info(f"Plugin unloaded: {name}")
+            return True
 
     def uninstall(self, name: str) -> bool:
-        plugin = self._plugins.get(name)
-        if plugin is None:
-            return False
-        if plugin.plugin_type == PluginType.BUILTIN:
-            self.logger.warning(f"Cannot uninstall builtin plugin: {name}")
-            return False
+        with self._lifecycle_lock:
+            plugin = self.get(name)
+            if plugin is None:
+                return False
+            if plugin.plugin_type == PluginType.BUILTIN:
+                self.logger.warning(f"Cannot uninstall builtin plugin: {name}")
+                return False
+            source = dict(self._plugin_sources.get(name, {}))
+            if not self.unload(name):
+                return False
 
-        source = self._plugin_sources.get(name, {})
-        self.unload(name)
+            if source.get("type") == "directory":
+                plug_path = source.get("source", "")
+                if (
+                    plug_path
+                    and os.path.isdir(plug_path)
+                    and plug_path.startswith(self._plugin_dir)
+                ):
+                    shutil.rmtree(plug_path, ignore_errors=True)
+                    self.logger.info(f"Plugin directory removed: {plug_path}")
 
-        if source.get("type") == "directory":
-            plug_path = source.get("source", "")
-            if (
-                plug_path
-                and os.path.isdir(plug_path)
-                and plug_path.startswith(self._plugin_dir)
-            ):
-                shutil.rmtree(plug_path, ignore_errors=True)
-                self.logger.info(f"Plugin directory removed: {plug_path}")
-
-        return True
+            return True
 
     def reload(self, name: str) -> bool:
-        plugin = self._plugins.get(name)
-        if plugin is None:
+        with self._lifecycle_lock:
+            plugin = self.get(name)
+            if plugin is None:
+                return False
+            if plugin.plugin_type == PluginType.BUILTIN:
+                self.logger.warning(f"Cannot reload builtin plugin: {name}")
+                return False
+            source = dict(self._plugin_sources.get(name, {}))
+            if not source:
+                return False
+
+            if not self.unload(name):
+                return False
+
+            src_path = source.get("source", "")
+            src_type = source.get("type", "")
+            if src_type == "zip" and os.path.isfile(src_path):
+                return bool(self.import_from_zip(src_path))
+            if src_type == "directory" and os.path.isdir(src_path):
+                return bool(self.import_from_dir(src_path))
             return False
-        if plugin.plugin_type == PluginType.BUILTIN:
-            self.logger.warning(f"Cannot reload builtin plugin: {name}")
-            return False
-
-        source = self._plugin_sources.get(name, {})
-        if not source:
-            return False
-
-        self.unload(name)
-
-        src_path = source.get("source", "")
-        src_type = source.get("type", "")
-        if src_type == "zip" and os.path.isfile(src_path):
-            return bool(self.import_from_zip(src_path))
-        if src_type == "directory" and os.path.isdir(src_path):
-            return bool(self.import_from_dir(src_path))
-
-        return False
 
     def enable(self, name: str) -> bool:
-        plugin = self._plugins.get(name)
-        if plugin is None:
-            return False
-        plugin.enabled = True
-        try:
-            plugin.on_enable()
-        except Exception as e:
-            self.logger.error(f"Plugin [{name}] enable error: {e}")
-        return True
-
+        with self._lifecycle_lock:
+            plugin = self.get(name)
+            if plugin is None:
+                return False
+            plugin.enabled = True
+            try:
+                plugin.on_enable()
+            except Exception as e:
+                self.logger.error(f"Plugin [{name}] enable error: {e}")
+            if self.bot and getattr(self.bot, "event_bus", None):
+                self.bot.event_bus.publish("plugin.enabled", {"plugin": name})
+            return True
     def disable(self, name: str) -> bool:
-        plugin = self._plugins.get(name)
-        if plugin is None:
-            return False
-        plugin.enabled = False
-        try:
-            plugin.on_disable()
-        except Exception as e:
-            self.logger.error(f"Plugin [{name}] disable error: {e}")
+        with self._lifecycle_lock:
+            plugin = self.get(name)
+            if plugin is None:
+                return False
+            plugin.enabled = False
+            try:
+                plugin.on_disable()
+            except Exception as e:
+                self.logger.error(f"Plugin [{name}] disable error: {e}")
+            if self.bot and getattr(self.bot, "event_bus", None):
+                self.bot.event_bus.publish("plugin.disabled", {"plugin": name})
+            return True
         return True
 
     # ── query ───────────────────────────────────────────────────────
 
     def get(self, name: str) -> Optional[BasePlugin]:
-        return self._plugins.get(name)
+        with self._index_lock:
+            return self._plugins.get(name)
 
     def get_all(self) -> List[BasePlugin]:
-        return list(self._plugins.values())
+        with self._index_lock:
+            return list(self._plugins.values())
 
     def get_all_info(self) -> List[PluginInfo]:
-        return [p.get_info() for p in self._plugins.values()]
+        with self._index_lock:
+            plugins = list(self._plugins.values())
+        return [p.get_info() for p in plugins]
 
     def get_enabled(self) -> List[BasePlugin]:
-        return [p for p in self._plugins.values() if p.enabled]
+        with self._index_lock:
+            return [p for p in self._plugins.values() if p.enabled]
 
     # ── command dispatch ────────────────────────────────────────────
 
+    def dispatch_message_listeners(self, message) -> None:
+        self._ensure_indexes()
+        for plugin in tuple(self._listener_index):
+            plugin.dispatch_listeners(message)
+
     def find_command_handler(self, content: str):
-        for plugin in self.get_enabled():
-            for cmd, aliases, perm, handler in plugin.get_all_command_handlers():
-                parts = content.strip().split()
-                if not parts:
-                    continue
-                first = parts[0]
-                if first == cmd or first in aliases:
-                    return plugin, handler, parts[1:]
+        parts = content.strip().split()
+        if not parts:
+            return None, None, []
+        self._ensure_indexes()
+        max_length = min(len(parts), self._max_command_tokens)
+        for length in range(max_length, 0, -1):
+            match = self._command_index.get(tuple(parts[:length]))
+            if match:
+                plugin, handler, _permission = match[0]
+                return plugin, handler, parts[length:]
         return None, None, []
 
     def find_regex_handler(self, content: str):
-        for plugin in self.get_enabled():
-            for pattern, handler in plugin.get_all_regex_handlers():
-                match = pattern.match(content)
-                if match:
-                    return plugin, handler, match
+        self._ensure_indexes()
+        for plugin, pattern, handler in tuple(self._regex_index):
+            match = pattern.match(content)
+            if match:
+                return plugin, handler, match
         return None, None, None
 
     def find_keyword_handler(self, content: str):
-        for plugin in self.get_enabled():
-            for keywords, handler in plugin.get_all_keyword_handlers():
-                for kw in keywords:
-                    if kw in content:
-                        return plugin, handler
+        self._ensure_indexes()
+        for plugin, keyword, handler in tuple(self._keyword_index):
+            if keyword in content:
+                return plugin, handler
         return None, None
 
     @property
     def count(self) -> int:
-        return len(self._plugins)
+        with self._index_lock:
+            return len(self._plugins)
 
     @property
     def enabled_count(self) -> int:
-        return len([p for p in self._plugins.values() if p.enabled])
+        with self._index_lock:
+            return len([p for p in self._plugins.values() if p.enabled])

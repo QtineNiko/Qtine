@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from qtine.adapters.onebot_v11 import OneBotV11Adapter
+from qtine.core.bus import EventBus
 from qtine.utils.models import AdapterStatus
 
 
@@ -30,6 +31,28 @@ class FakeWebSocket:
 
 
 class OneBotV11AdapterTests(unittest.TestCase):
+    def test_status_events_are_published_on_edges(self):
+        class Bot:
+            event_bus = EventBus()
+
+        bot = Bot()
+        bot.event_bus.clear()
+        events = []
+        bot.event_bus.subscribe(
+            "adapter.connected", lambda data: events.append(("up", data))
+        )
+        bot.event_bus.subscribe(
+            "adapter.disconnected", lambda data: events.append(("down", data))
+        )
+        adapter = OneBotV11Adapter()
+        adapter.bot = bot
+        adapter._update_status(AdapterStatus.CONNECTED, "10001")
+        adapter._update_status(AdapterStatus.CONNECTED, "10001")
+        adapter._update_status(AdapterStatus.DISCONNECTED)
+        self.assertEqual([kind for kind, _ in events], ["up", "down"])
+        self.assertEqual(events[0][1]["self_id"], "10001")
+        bot.event_bus.clear()
+
     def test_authorization_supports_bearer_and_query_token(self):
         adapter = OneBotV11Adapter(access_token="secret")
         self.assertTrue(adapter.is_authorized({"Authorization": "Bearer secret"}))
