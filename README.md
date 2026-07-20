@@ -2,7 +2,7 @@
 
 一个基于 Flask + WebSocket 的模块化聊天机器人框架，支持 OneBot V11 协议、插件化扩展和 WebUI 管理。
 
-[官方文档](https://qtineniko.github.io/) · [快速开始](https://qtineniko.github.io/guide/quick-start) · [GitHub](https://github.com/QtineNiko/Qtine)
+[官方文档](https://qtineniko.github.io/) · [快速开始](https://qtineniko.github.io/#/guide/quick-start) · [GitHub](https://github.com/QtineNiko/Qtine)
 
 > **项目状态**：持续开发中。当前内置 OneBot V11 适配器，可通过 NapCat、LLOneBot 等实现接入 QQ。
 
@@ -49,9 +49,9 @@ security:
 默认服务监听地址为 `0.0.0.0:4990`，OneBot V11 反向 WebSocket 路径为 `/onebot/v11`。
 
 > [!WARNING]
-> 生产环境请修改 `config.yml` 中默认的 WebUI 用户名、密码和 `session_secret`，并妥善保管管理员 Token。详细说明见 [WebUI 配置](https://qtineniko.github.io/config/webui) 和 [安全配置](https://qtineniko.github.io/config/security)。
+> 生产环境请修改 `config.yml` 中默认的 WebUI 用户名、密码和 `session_secret`，并妥善保管管理员 Token。详细说明见 [WebUI 配置](https://qtineniko.github.io/#/config/webui) 和 [安全配置](https://qtineniko.github.io/#/config/security)。
 
-需要接入 QQ？请继续阅读 [对接 NapCat](https://qtineniko.github.io/guide/connect-napcat)。
+需要接入 QQ？请继续阅读 [对接 NapCat](https://qtineniko.github.io/#/guide/connect-napcat)。
 
 ## 📚 官方文档
 
@@ -59,11 +59,11 @@ security:
 
 | 使用与部署 | 管理与配置 | 开发与支持 |
 | --- | --- | --- |
-| [快速开始](https://qtineniko.github.io/guide/quick-start) | [基础配置](https://qtineniko.github.io/config/basic) | [插件开发](https://qtineniko.github.io/develop/plugin) |
-| [对接 NapCat](https://qtineniko.github.io/guide/connect-napcat) | [WebUI 使用](https://qtineniko.github.io/guide/webui) | [适配器开发](https://qtineniko.github.io/develop/adapter) |
-| [Docker 部署](https://qtineniko.github.io/guide/docker) | [命令参考](https://qtineniko.github.io/commands/plugin) | [API 参考](https://qtineniko.github.io/develop/api) |
-| [反向代理](https://qtineniko.github.io/guide/reverse-proxy) | [插件管理](https://qtineniko.github.io/guide/plugin-manage) | [FAQ](https://qtineniko.github.io/guide/faq) |
-|  | [适配器管理](https://qtineniko.github.io/guide/adapter-manage) | [更新日志](https://qtineniko.github.io/guide/changelog) |
+| [快速开始](https://qtineniko.github.io/#/guide/quick-start) | [基础配置](https://qtineniko.github.io/#/config/basic) | [插件开发](https://qtineniko.github.io/#/develop/plugin) |
+| [对接 NapCat](https://qtineniko.github.io/#/guide/connect-napcat) | [WebUI 使用](https://qtineniko.github.io/#/guide/webui) | [适配器开发](https://qtineniko.github.io/#/develop/adapter) |
+| [Docker 部署](https://qtineniko.github.io/#/guide/docker) | [命令参考](https://qtineniko.github.io/#/commands/plugin) | [API 参考](https://qtineniko.github.io/#/develop/api) |
+| [反向代理](https://qtineniko.github.io/#/guide/reverse-proxy) | [插件管理](https://qtineniko.github.io/#/guide/plugin-manage) | [FAQ](https://qtineniko.github.io/#/guide/faq) |
+|  | [适配器管理](https://qtineniko.github.io/#/guide/adapter-manage) | [更新日志](https://qtineniko.github.io/#/guide/changelog) |
 
 ## 🐳 Docker 部署
 
@@ -71,7 +71,7 @@ security:
 docker compose up -d
 ```
 
-更多部署选项请参阅 [Docker 部署文档](https://qtineniko.github.io/guide/docker) 和 [反向代理文档](https://qtineniko.github.io/guide/reverse-proxy)。
+更多部署选项请参阅 [Docker 部署文档](https://qtineniko.github.io/#/guide/docker) 和 [反向代理文档](https://qtineniko.github.io/#/guide/reverse-proxy)。
 
 ## 🤝 贡献
 
