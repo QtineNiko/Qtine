@@ -195,7 +195,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
   var KEYWORD='';
   var DETAIL_PLUGIN=null;
 
-  function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
+  function logout(){fetch('/api/logout',{method:'POST'}).finally(function(){localStorage.removeItem('qtine_auth');location.href='/webui/login'})}
   function toast(m){var s=document.getElementById('sb');s.textContent=m;s.classList.add('show');clearTimeout(s._t);s._t=setTimeout(function(){s.classList.remove('show')},3000)}
   window.logout=logout;
   window.toast=toast;

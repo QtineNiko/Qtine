@@ -1,39 +1,104 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="theme-color" content="#141218"><title>Qtine 控制台 - 登录</title><style>
-:root{--p:#D0BCFF;--op:#381E72;--e:#F2B8B5;--bg:#141218;--sf:#211F26;--sfc:#2B2930;--on-s:#E6E1E5;--on-sv:#CAC4D0;--ol:#938F99;--rad-s:8px;--rad-m:12px;--rad-xl:28px;--rad-f:9999px;--elev3:0 1px 3px rgba(0,0,0,.3),0 4px 8px 3px rgba(0,0,0,.15);--tr:200ms cubic-bezier(.2,0,0,1)}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#000000">
+<title>Qtine 控制台</title>
+<style>
+:root{
+  --bg:#000;--p:#d0bcff;--p-deep:#9b7de0;--p-glow:rgba(208,188,255,.4);
+  --text:#fff;--text-2:rgba(255,255,255,.6);--text-3:rgba(255,255,255,.35);
+  --border:rgba(255,255,255,.08);--border-focus:rgba(208,188,255,.4);
+  --radius:20px;--radius-btn:16px;--ease:cubic-bezier(.16,1,.3,1);
+}
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-body{height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-.card{background:var(--sf);border-radius:var(--rad-xl);padding:48px 40px;width:100%;max-width:400px;box-shadow:var(--elev3);text-align:center}
-.card h1{font:400 24px/32px Roboto,sans-serif;margin-bottom:4px}
-.card h1 span{color:var(--p)}
-.card p{color:var(--on-sv);margin-bottom:32px}
-.field{position:relative;margin-bottom:16px}
-.field input{width:100%;padding:14px 16px;background:var(--sfc);border:1px solid var(--ol);border-radius:var(--rad-s);font:400 16px/24px Roboto,sans-serif;color:var(--on-s);outline:none;transition:border var(--tr)}
-.field input:focus{border-color:var(--p)}
-.btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 24px;border-radius:var(--rad-f);font:500 14px/20px Roboto,sans-serif;border:none;cursor:pointer;transition:all var(--tr)}
-.btn-p{background:var(--p);color:var(--op);width:100%;padding:14px;margin-top:8px}
-.btn-p:hover{opacity:.9}
-.error{font-size:12px;color:var(--e);min-height:20px;margin-top:4px}
-.hint{font-size:12px;color:var(--on-sv);margin-top:16px}
-.hint code{color:var(--p);background:var(--sfc);padding:2px 8px;border-radius:4px;font:400 13px/20px 'Roboto Mono',monospace}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.bg{position:fixed;inset:0;z-index:0}
+.bg-gradient{position:absolute;inset:0;background:radial-gradient(ellipse 60% 50% at 20% 30%,rgba(208,188,255,.12),transparent 65%),radial-gradient(ellipse 50% 60% at 80% 70%,rgba(155,125,224,.08),transparent 60%),radial-gradient(ellipse 40% 40% at 50% 50%,rgba(100,150,255,.04),transparent 70%)}
+.bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.01) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.01) 1px,transparent 1px);background-size:60px 60px}
+.bg-noise{position:absolute;inset:0;opacity:.02;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.main{position:relative;z-index:10;width:100%;max-width:420px;padding:0 24px;display:flex;flex-direction:column;align-items:center}
+.logo-wrap{margin-bottom:40px;opacity:0;transform:translateY(16px);animation:fadeUp 1s var(--ease) .1s forwards}
+.logo{width:80px;height:80px;border-radius:24px;background:linear-gradient(135deg,var(--p),var(--p-deep));display:flex;align-items:center;justify-content:center;box-shadow:0 20px 60px rgba(208,188,255,.25),inset 0 1px 0 rgba(255,255,255,.25);transition:transform .4s var(--ease),box-shadow .4s var(--ease)}
+.logo:hover{transform:scale(1.05);box-shadow:0 28px 80px rgba(208,188,255,.35),inset 0 1px 0 rgba(255,255,255,.3)}
+.logo svg{width:40px;height:40px;color:#fff;fill:none;stroke-width:2}
+.heading{text-align:center;margin-bottom:12px;opacity:0;transform:translateY(16px);animation:fadeUp 1s var(--ease) .2s forwards}
+.title{font-size:34px;font-weight:700;letter-spacing:-1.5px;line-height:1.1;background:linear-gradient(180deg,#fff,rgba(255,255,255,.8));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.title span{background:linear-gradient(135deg,var(--p),var(--p-deep));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{font-size:14px;color:var(--text-2);letter-spacing:.3px;margin-top:8px;font-weight:400}
+.card{width:100%;margin-top:8px;opacity:0;transform:translateY(20px);animation:fadeUp 1s var(--ease) .3s forwards}
+.card-inner{background:rgba(255,255,255,.02);backdrop-filter:blur(40px) saturate(150%);-webkit-backdrop-filter:blur(40px) saturate(150%);border:1px solid var(--border);border-radius:var(--radius);padding:32px;box-shadow:0 40px 100px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);position:relative;overflow:hidden}
+.card-inner::before{content:'';position:absolute;inset:0;border-radius:inherit;background:radial-gradient(circle 300px at 50% 0%,rgba(208,188,255,.06),transparent 60%)}
+.input-group{position:relative;margin-bottom:8px;opacity:0;transform:translateY(12px);animation:fadeUp .8s var(--ease) .45s forwards}
+.input-wrap{position:relative;border-radius:var(--radius-btn);background:rgba(255,255,255,.03);border:1px solid var(--border);transition:all .4s var(--ease)}
+.input-wrap:focus-within{border-color:var(--border-focus);background:rgba(208,188,255,.04);box-shadow:0 0 0 2px rgba(208,188,255,.08),0 8px 24px rgba(208,188,255,.08)}
+.input-label{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-3);pointer-events:none;transition:all .3s var(--ease);z-index:1}
+.input-wrap:focus-within .input-label{top:10px;transform:translateY(-50%) scale(.85);color:var(--p)}
+.input-wrap.has-value .input-label{top:10px;transform:translateY(-50%) scale(.85)}
+.input-field{width:100%;padding:14px 16px 16px;background:transparent;border:none;outline:none;font-size:15px;color:var(--text);font-family:inherit}
+.input-field::placeholder{opacity:0}
+.error{font-size:12px;color:#f2b8b5;padding:6px 0 0 4px;opacity:0;transform:translateY(-4px);transition:all .3s var(--ease);min-height:18px}
+.error.show{opacity:1;transform:translateY(0)}
+.btn-login{width:100%;margin-top:12px;padding:15px 24px;border-radius:var(--radius-btn);border:none;cursor:pointer;font-size:15px;font-weight:600;color:#1d1a23;background:linear-gradient(135deg,var(--p),#c4b1ed);box-shadow:0 8px 24px var(--p-glow),inset 0 1px 0 rgba(255,255,255,.3);transition:all .4s var(--ease);position:relative;overflow:hidden;opacity:0;transform:translateY(12px);animation:fadeUp .8s var(--ease) .55s forwards}
+.btn-login::before{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.3) 50%,transparent 65%);transform:translateX(-100%);transition:transform .8s var(--ease)}
+.btn-login:hover{transform:translateY(-2px);box-shadow:0 14px 36px var(--p-glow),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn-login:hover::before{transform:translateX(100%)}
+.btn-login:active{transform:translateY(0) scale(.99)}
+.btn-login:disabled{opacity:.7;cursor:not-allowed;transform:none}
+.hint{margin-top:24px;text-align:center;font-size:12px;color:var(--text-3);line-height:1.6;opacity:0;transform:translateY(12px);animation:fadeUp .8s var(--ease) .65s forwards}
+.hint code{color:var(--p);background:rgba(208,188,255,.08);padding:3px 10px;border-radius:8px;font:400 12px/18px 'SF Mono','Menlo','Roboto Mono',monospace;border:1px solid rgba(208,188,255,.1)}
+.status{position:fixed;top:24px;left:24px;z-index:100;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);letter-spacing:.5px;opacity:0;animation:fadeUp .8s var(--ease) .2s forwards}
+.status-dot{width:6px;height:6px;border-radius:50%;background:#7dd78d;box-shadow:0 0 8px rgba(125,215,141,.5);animation:pulse 2s ease-in-out infinite}
+@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@media (max-width:480px){.main{padding:0 20px}.logo-wrap{margin-bottom:32px}.logo{width:72px;height:72px}.logo svg{width:36px;height:36px}.title{font-size:30px}.card-inner{padding:28px 24px}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 <script src="/static/theme.js"></script>
-</head><body>
-<div class="card" id="login-page">
-  <h1>Qtine <span>控制台</span></h1>
-  <p>输入管理令牌以登录</p>
-  <div class="field"><input type="password" id="token" placeholder="管理令牌"></div>
-  <div class="error" id="err"></div>
-  <button class="btn btn-p" id="submit">登 录</button>
-  <p class="hint">令牌在首次启动时生成，存储在 <code>data/token.txt</code></p>
+</head>
+<body>
+<div class="bg"><div class="bg-gradient"></div><div class="bg-grid"></div><div class="bg-noise"></div></div>
+<div class="status"><span class="status-dot"></span><span>Qtine Server</span></div>
+<div class="main">
+  <div class="logo-wrap"><div class="logo"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div></div>
+  <div class="heading"><div class="title">Qtine <span>控制台</span></div><div class="subtitle">输入管理令牌以登录</div></div>
+  <div class="card">
+    <div class="card-inner">
+      <div class="input-group">
+        <div class="input-wrap" id="input-wrap"><span class="input-label">管理令牌</span><input type="password" class="input-field" id="token" placeholder="管理令牌" autocomplete="off" spellcheck="false"></div>
+        <div class="error" id="err"></div>
+      </div>
+      <button class="btn-login" id="submit">登 录</button>
+      <div class="hint">令牌在首次启动时生成，存储在 <code>data/token.txt</code></div>
+    </div>
+  </div>
 </div>
 <script>
 (function(){
-  var t=document.getElementById('token'),err=document.getElementById('err'),s=document.getElementById('submit');
-  s.onclick=function(){
-    fetch('/api/verify-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:t.value})}).then(function(r){return r.json()}).then(function(d){
-      if(d.valid){localStorage.setItem('qtine_auth','1');location.href='/webui/dashboard'}else{err.textContent='令牌无效'}
-    });
-  };
-  t.onkeydown=function(e){if(e.key==='Enter')s.click()};
+  var token=document.getElementById('token'),inputWrap=document.getElementById('input-wrap'),err=document.getElementById('err'),submit=document.getElementById('submit');
+  token.addEventListener('input',function(){inputWrap.classList.toggle('has-value',token.value.length>0);if(err.classList.contains('show'))err.classList.remove('show')});
+  function login(){
+    if(!token.value.trim()){err.textContent='请输入管理令牌';err.classList.add('show');return}
+    err.classList.remove('show');submit.disabled=true;var origText=submit.textContent;submit.textContent='验证中…';
+    fetch('/api/verify-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:token.value})})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(d.valid){localStorage.setItem('qtine_auth','1');submit.textContent='成功';document.body.style.transition='all .5s cubic-bezier(.16,1,.3,1)';document.body.style.opacity='0';setTimeout(function(){location.href='/webui/dashboard'},400)}
+        else{err.textContent='令牌无效，请检查后重试';err.classList.add('show');submit.disabled=false;submit.textContent=origText}
+      })
+      .catch(function(){err.textContent='网络异常，请稍后重试';err.classList.add('show');submit.disabled=false;submit.textContent=origText});
+  }
+  submit.onclick=login;token.onkeydown=function(e){if(e.key==='Enter')login()};
+  setTimeout(function(){token.focus()},600);
 })();
-</script></body></html>
+</script>
+</body>
+</html>

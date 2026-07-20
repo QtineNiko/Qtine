@@ -383,6 +383,18 @@ class QtineBot:
         except Exception as e:
             self.logger.warning(f"Webhook trigger error: {e}")
 
+        # Socket.IO push
+        try:
+            self.socketio.emit("message", {
+                "sender": sender_name,
+                "content": message.content,
+                "adapter": message.adapter,
+                "group_id": message.group_id,
+                "timestamp": time.time(),
+            })
+        except Exception as e:
+            self.logger.debug(f"SocketIO emit error: {e}")
+
     def send(self, message: Message, text: str):
         if message.is_group() and message.group_id:
             return self.adapter_manager.send_message(
@@ -1060,6 +1072,13 @@ class QtineApp:
                 )
             else:
                 self._record_login_failure(client)
+            return resp
+
+        @app.route("/api/logout", methods=["POST"])
+        def api_logout():
+            """Clear auth cookie and logout."""
+            resp = jsonify({"success": True})
+            resp.set_cookie("qtine_token", "", expires=0)
             return resp
 
         @app.route("/api/token")

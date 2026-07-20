@@ -1,53 +1,92 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="theme-color" content="#141218"><title>Qtine 仪表盘</title><style>
-:root{--p:#D0BCFF;--op:#381E72;--pc:#4F378B;--s:#CCC2DC;--os:#332D41;--sc:#4A4458;--t:#EFB8C8;--e:#F2B8B5;--oe:#601410;--su:#7DD78D;--w:#FFD970;--bg:#141218;--sf:#211F26;--sf-low:#1D1B20;--sfc:#2B2930;--on-s:#E6E1E5;--on-sv:#CAC4D0;--ol:#938F99;--olv:#49454F;--rad-s:8px;--rad-m:12px;--rad-l:16px;--rad-xl:28px;--rad-f:9999px;--elev1:0 1px 2px rgba(0,0,0,.3),0 1px 3px 1px rgba(0,0,0,.15);--tr:200ms cubic-bezier(.2,0,0,1);--mono:400 13px/20px 'Roboto Mono',monospace}
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="theme-color" content="#0f0e13"><title>Qtine 仪表盘</title><style>
+:root{--p:#818cf8;--p2:#c4b5fd;--op:#1e1b4b;--pc:#312e81;--sc:#3f3c4b;--e:#f87171;--su:#34d399;--w:#fbbf24;--bg:#0f0e13;--sf:#1a1823;--sfc:#23212e;--on-s:#f5f3f7;--on-sv:#a7a0b3;--ol:#6b6578;--olv:#3d3a4a;--rad-xs:6px;--rad-s:10px;--rad-m:14px;--rad-l:20px;--rad-f:9999px;--elev1:0 4px 20px rgba(0,0,0,.4);--elev2:0 8px 32px rgba(0,0,0,.5);--tr:300ms cubic-bezier(.2,.8,.2,1);--mono:400 13px/20px 'JetBrains Mono',monospace}
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-.top-bar{display:flex;align-items:center;height:56px;padding:0 16px;background:var(--sf);border-bottom:1px solid var(--olv);flex-shrink:0;z-index:10}
-.top-bar .brand{font:400 22px/28px Roboto,sans-serif;flex:1;margin-left:12px}
-.top-bar .brand span{color:var(--p)}
-.top-bar .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-left:6px}
-.dot.online{background:var(--su)}.dot.offline{background:var(--e)}.dot.connecting{background:var(--w)}
-.badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:var(--rad-f);font:500 11px/16px Roboto,sans-serif;background:var(--p);color:var(--op)}
-.mono{font:var(--mono);color:var(--p)}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:var(--rad-f);font:500 14px/20px Roboto,sans-serif;border:none;cursor:pointer;transition:all var(--tr);background:transparent;color:var(--on-sv)}
-.btn:hover{background:rgba(202,196,208,.08)}
-.btn.danger{color:var(--e)}.btn.danger:hover{background:rgba(242,184,181,.08)}
+body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--on-s);font:400 14px/20px Inter,sans-serif;-webkit-font-smoothing:antialiased}
+.top-bar{display:flex;align-items:center;height:60px;padding:0 20px;background:var(--sf);border-bottom:1px solid var(--olv);flex-shrink:0;z-index:10}
+.top-bar .brand{font:700 20px/28px Inter,sans-serif;flex:1;margin-left:14px;letter-spacing:-.5px}
+.top-bar .brand span{background:linear-gradient(135deg,var(--p),var(--p2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.top-bar .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-left:8px;box-shadow:0 0 10px currentColor}
+.dot.online{background:var(--su);color:var(--su)}
+.dot.offline{background:var(--e);color:var(--e)}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 10px;border-radius:var(--rad-f);font:600 11px/16px Inter,sans-serif;background:rgba(129,140,248,.15);color:var(--p);border:1px solid rgba(129,140,248,.25)}
+.mono{font:var(--mono);color:var(--p);opacity:.7;font-size:12px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:var(--rad-f);font:600 13px/20px Inter,sans-serif;border:none;cursor:pointer;transition:all var(--tr);background:transparent;color:var(--on-sv)}
+.btn:hover{background:rgba(255,255,255,.05)}
 .layout{display:flex;flex:1;overflow:hidden}
 .nav{width:72px;background:var(--sf);border-right:1px solid var(--olv);display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:2px;flex-shrink:0}
-.nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;width:60px;padding:10px 2px;border:none;border-radius:var(--rad-l);background:transparent;color:var(--on-sv);cursor:pointer;font:500 11px/16px Roboto,sans-serif;transition:all var(--tr);text-align:center;text-decoration:none}
-.nav-item:hover{background:rgba(202,196,208,.08)}
-.nav-item.active{background:var(--sc);color:#E8DEF8}
-.nav-item svg{width:22px;height:22px;fill:currentColor}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;width:60px;padding:10px 2px;border:none;border-radius:var(--rad-m);background:transparent;color:var(--on-sv);cursor:pointer;font:600 10px/14px Inter,sans-serif;transition:all var(--tr);text-align:center;text-decoration:none;letter-spacing:.3px}
+.nav-item:hover{background:rgba(255,255,255,.04);color:var(--on-s)}
+.nav-item.active{background:linear-gradient(135deg,rgba(129,140,248,.18),rgba(196,181,253,.1));color:var(--p);box-shadow:inset 0 0 20px rgba(129,140,248,.08)}
+.nav-item svg{width:24px;height:24px;fill:currentColor}
 .nav-spacer{flex:1}
-.main{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-.card{background:var(--sf);border-radius:var(--rad-m);border:1px solid var(--olv);padding:16px;box-shadow:var(--elev1)}
-.card.colored{background:var(--pc);color:#EADDFF;border-color:transparent}
-.card h3{font:500 14px/20px Roboto,sans-serif;color:var(--on-sv);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
-.card.colored h3{color:rgba(234,221,255,.7)}
-.card .val{font:400 24px/32px Roboto,sans-serif}
-.chart-box{width:100%;height:180px}
-.log-box{background:var(--sf-low);border-radius:var(--rad-m);border:1px solid var(--olv);padding:12px;height:280px;overflow-y:auto;font:var(--mono)}
-.log-line{padding:1px 0;white-space:pre-wrap;word-break:break-all;font-size:12px}
-.muted{color:var(--on-sv)}
-.row{display:flex;align-items:center;gap:8px;padding:4px 0}
-.dot-sm{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-.dot-sm.online{background:var(--su)}.dot-sm.offline{background:var(--e)}.dot-sm.connecting{background:var(--w)}
-.chip{display:inline-flex;align-items:center;padding:2px 10px;border-radius:var(--rad-s);font:500 12px/16px Roboto,sans-serif;background:var(--sfc);color:var(--on-s);border:1px solid var(--ol)}
-.chip.ok{background:rgba(125,215,141,.15);color:var(--su)}.chip.err{background:rgba(242,184,181,.15);color:var(--e)}.chip.warn{background:rgba(255,217,112,.15);color:var(--w)}
+.main{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px}
+
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── 统计卡片 ── */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.stat-card{background:var(--sf);border-radius:var(--rad-l);border:1px solid var(--olv);padding:24px;position:relative;overflow:hidden;transition:all var(--tr);animation:fadeInUp .4s ease-out both}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--p),var(--p2));opacity:0;transition:opacity var(--tr)}
+.stat-card:hover::before{opacity:1}
+.stat-card:hover{transform:translateY(-4px);box-shadow:var(--elev2);border-color:rgba(129,140,248,.3)}
+.stat-card .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.stat-card .head .icon{width:44px;height:44px;border-radius:var(--rad-m);background:linear-gradient(135deg,rgba(129,140,248,.2),rgba(196,181,253,.15));color:var(--p);display:flex;align-items:center;justify-content:center;font:700 20px/28px Inter,sans-serif;flex-shrink:0;backdrop-filter:blur(10px)}
+.stat-card .head .tag{font:700 11px/14px Inter,sans-serif;color:var(--on-sv);letter-spacing:.8px;text-transform:uppercase}
+.stat-card .val{font:700 40px/48px Inter,sans-serif;color:var(--on-s);letter-spacing:-1px;margin-bottom:4px}
+.stat-card .sub{font:400 13px/18px Inter,sans-serif;color:var(--on-sv)}
+
+/* ── 两列 ── */
+.two-col{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
+
+/* ── 面板 ── */
+.panel{background:var(--sf);border-radius:var(--rad-l);border:1px solid var(--olv);overflow:hidden;transition:all var(--tr);animation:fadeInUp .4s ease-out both}
+.panel:hover{box-shadow:var(--elev1);border-color:rgba(129,140,248,.2)}
+.panel .head{padding:18px 20px;border-bottom:1px solid var(--olv);display:flex;align-items:center;justify-content:space-between}
+.panel .head h3{font:600 15px/22px Inter,sans-serif;color:var(--on-s);letter-spacing:-.3px}
+.panel .body{padding:20px}
+
+/* ── 图表 ── */
+.chart-box{height:260px}
+.chart-box canvas{width:100%!important;height:100%!important}
+
+/* ── 列表 ── */
+.list{display:flex;flex-direction:column;gap:10px}
+.list-item{display:flex;align-items:center;gap:12px;padding:14px;background:var(--sfc);border-radius:var(--rad-m);border:1px solid transparent;transition:all var(--tr)}
+.list-item:hover{background:rgba(255,255,255,.02);border-color:rgba(129,140,248,.15);transform:translateX(4px)}
+.list-item .icon{width:36px;height:36px;border-radius:var(--rad-s);background:linear-gradient(135deg,rgba(129,140,248,.15),rgba(196,181,253,.1));color:var(--p);display:flex;align-items:center;justify-content:center;font:700 14px/20px Inter,sans-serif;flex-shrink:0}
+.list-item .info{flex:1;min-width:0}
+.list-item .info .name{font:600 14px/20px Inter,sans-serif;color:var(--on-s);letter-spacing:-.2px}
+.list-item .info .meta{font:400 12px/16px Inter,sans-serif;color:var(--on-sv);margin-top:2px}
+.list-item .info .meta span{margin-right:12px}
+.list-item .status{font:700 11px/14px Inter,sans-serif;padding:4px 12px;border-radius:var(--rad-f);letter-spacing:.5px}
+.list-item .status.ok{background:rgba(52,211,153,.12);color:var(--su);border:1px solid rgba(52,211,153,.2)}
+.list-item .status.err{background:rgba(248,113,113,.12);color:var(--e);border:1px solid rgba(248,113,113,.2)}
+
+/* ── 消息列表 ── */
+.msg-list{max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.msg-item{display:flex;gap:10px;padding:12px;background:var(--sfc);border-radius:var(--rad-m);border-left:3px solid var(--p);animation:fadeInUp .3s ease-out both;transition:all var(--tr)}
+.msg-item:hover{background:rgba(255,255,255,.02)}
+.msg-item .avatar{width:30px;height:30px;border-radius:var(--rad-s);background:linear-gradient(135deg,rgba(129,140,248,.2),rgba(196,181,253,.15));color:var(--p);display:flex;align-items:center;justify-content:center;font:700 12px/16px Inter,sans-serif;flex-shrink:0}
+.msg-item .content{flex:1;min-width:0}
+.msg-item .content .head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.msg-item .content .head .user{font:600 13px/18px Inter,sans-serif;color:var(--on-s)}
+.msg-item .content .head .time{font:400 11px/14px Inter,sans-serif;color:var(--on-sv)}
+.msg-item .content .text{font:400 13px/18px Inter,sans-serif;color:var(--on-sv);white-space:pre-wrap;word-break:break-all;line-height:1.5}
+.empty{text-align:center;padding:40px;color:var(--on-sv);font-size:13px}
+
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--olv);border-radius:3px}
-@media(max-width:768px){.nav{width:56px}.nav-item{width:48px;padding:8px 1px;font-size:10px}.grid{grid-template-columns:1fr}.main{padding:12px}}
+@media(max-width:1280px){.stats-grid{grid-template-columns:repeat(2,1fr)}.two-col{grid-template-columns:1fr}}
+@media(max-width:768px){.nav{width:60px}.nav-item{width:44px;padding:10px 2px;font-size:9px}.stats-grid{grid-template-columns:1fr}.main{padding:16px}}
 </style>
 <script src="/static/theme.js"></script>
-
 </head><body>
 <header class="top-bar">
   <div style="display:flex;align-items:center;flex:1">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="var(--p)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-    <div class="brand">Qtine <span>控制台</span><span class="dot online" id="dot"></span></div>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#818cf8"/><stop offset="100%" style="stop-color:#c4b5fd"/></linearGradient></defs><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="url(#g1)"/></svg>
+    <div class="brand">Qtine <span>仪表盘</span><span class="dot online" id="dot"></span></div>
   </div>
-  <span class="mono" style="opacity:.6;font-size:12px" id="ver">v1.1.0</span>
-  <button class="btn" onclick="logout()" style="margin-left:12px">退出登录</button>
+  <span class="mono" id="ver">v1.1.0</span>
+  <button class="btn" onclick="logout()" style="margin-left:16px">退出登录</button>
 </header>
 <div class="layout">
   <nav class="nav">
@@ -63,70 +102,62 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     <div class="nav-spacer"></div>
   </nav>
   <main class="main">
-    <div class="grid">
-      <div class="card colored"><h3>运行状态</h3><div class="val" id="status">--</div></div>
-      <div class="card colored"><h3>运行时长</h3><div class="val" id="uptime">--</div></div>
-      <div class="card"><h3>插件</h3><div class="val"><span id="pen">0</span> / <span id="ptot">0</span></div><span class="muted" style="font-size:12px">已启用 / 总计</span></div>
-      <div class="card"><h3>适配器</h3><div id="adapters"></div></div>
-      <div class="card"><h3>内存使用</h3><div class="val" id="mem">-- MB</div><span class="muted" style="font-size:12px">进程内存</span></div>
-      <div class="card"><h3>CPU</h3><div class="val" id="cpu">--%</div><span class="muted" style="font-size:12px">进程占用</span></div>
-      <div class="card"><h3>定时任务</h3><div class="val" id="tasks">0</div><span class="muted" style="font-size:12px">已注册任务</span></div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="head"><div class="icon">◉</div><div class="tag">运行状态</div></div><div class="val" id="s-status">运行中</div><div class="sub" id="s-uptime">--</div></div>
+      <div class="stat-card"><div class="head"><div class="icon">✉</div><div class="tag">消息总数</div></div><div class="val" id="s-msgs">0</div><div class="sub" id="s-rate">-- 条/分</div></div>
+      <div class="stat-card"><div class="head"><div class="icon">◎</div><div class="tag">内存</div></div><div class="val" id="s-mem">-- MB</div><div class="sub" id="s-mem-pct">--</div></div>
+      <div class="stat-card"><div class="head"><div class="icon">▤</div><div class="tag">CPU</div></div><div class="val" id="s-cpu">--%</div><div class="sub" id="s-cpu-cores">-- 核心</div></div>
     </div>
-    <div class="card"><h3>消息速率</h3><div class="chart-box"><canvas id="chart"></canvas></div></div>
-    <div class="card"><h3>实时消息 <span class="badge" id="live-count">0</span></h3><div class="log-box" id="live-msgs"><div class="log-line muted">等待中...</div></div></div>
+    <div class="two-col">
+      <div class="panel"><div class="head"><h3>消息速率</h3><span class="badge" id="chart-badge">实时</span></div><div class="body"><div class="chart-box"><canvas id="chart"></canvas></div></div></div>
+      <div class="panel"><div class="head"><h3>适配器</h3><span class="badge" id="adapter-count">0</span></div><div class="body"><div class="list" id="adapter-list"><div class="empty">暂无适配器</div></div></div></div>
+    </div>
+    <div class="panel"><div class="head"><h3>实时消息</h3><span class="badge" id="live-count">0</span></div><div class="body"><div class="msg-list" id="msg-list"><div class="empty">等待消息中...</div></div></div></div>
   </main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
 (function(){
-  function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
-  function fmt(s){var d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),se=Math.floor(s%60);return d+'天 '+h+'时 '+m+'分 '+se+'秒'}
+  function logout(){fetch('/api/logout',{method:'POST'}).finally(function(){localStorage.removeItem('qtine_auth');location.href='/webui/login'})}window.logout=logout
+  function fmtUptime(s){var d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);if(d>0)return d+'天 '+h+'时';if(h>0)return h+'时 '+m+'分';return m+'分'}
   var hist=[],chart=null;
-  function fetchStatus(){
-    fetch('/api/status').then(function(r){
-      if(r.status===401){logout();return}
-      return r.json()
-    }).then(function(d){
+  function initChart(){var ctx=document.getElementById('chart').getContext('2d');chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:'消息/分',data:[],borderColor:'#818cf8',backgroundColor:'rgba(129,140,248,.08)',fill:true,tension:.4,pointRadius:0,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#23212e',borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'#f5f3f7',bodyColor:'#a7a0b3',padding:12,cornerRadius:10}},scales:{x:{display:false},y:{beginAtZero:true,grid:{color:'rgba(61,58,74,.4)'},ticks:{color:'#a7a0b3',font:{size:11}}}}}})}
+  function addMsg(msg){var list=document.getElementById('msg-list');var cnt=document.getElementById('live-count');if(list.querySelector('.empty'))list.innerHTML='';var item=document.createElement('div');item.className='msg-item';var ts=new Date(msg.timestamp||Date.now());var t=ts.getHours().toString().padStart(2,'0')+':'+ts.getMinutes().toString().padStart(2,'0')+':'+ts.getSeconds().toString().padStart(2,'0');var avatar=(msg.sender||'?').charAt(0).toUpperCase();item.innerHTML='<div class="avatar">'+avatar+'</div><div class="content"><div class="head"><span class="user">'+(msg.sender||'未知')+'</span><span class="time">'+t+'</span></div><div class="text">'+(msg.content||'')+'</div></div>';list.insertBefore(item,list.firstChild);if(list.children.length>50)list.removeChild(list.lastChild);cnt.textContent=list.children.length}
+  var prevTotal=0,prevTime=Date.now();
+  function fetchAll(){
+    fetch('/api/status').then(function(r){if(r.status===401){logout();return}return r.json()}).then(function(d){
       if(!d)return;
-      document.getElementById('status').textContent=d.status==='running'?'运行中':'已停止';
-      document.getElementById('uptime').textContent=fmt(d.uptime||0);
-      document.getElementById('pen').textContent=d.plugins_enabled||0;
-      document.getElementById('ptot').textContent=d.plugins||0;
+      var running=d.status==='running';
+      document.getElementById('dot').className='dot '+(running?'online':'offline');
+      document.getElementById('s-status').textContent=running?'运行中':'已停止';
+      document.getElementById('s-uptime').textContent='已运行 '+fmtUptime(d.uptime||0);
       document.getElementById('ver').textContent=d.version||'v1.1.0';
-      var dot=document.getElementById('dot');
-      dot.className='dot '+(d.status==='running'?'online':'offline');
-      var ae=document.getElementById('adapters');ae.innerHTML='';
-      (d.adapters||[]).forEach(function(a){
-        var di=document.createElement('div');di.className='row';
-        di.innerHTML='<span class="dot-sm '+a.status+'"></span><span style="flex:1">'+a.name+' ('+a.protocol+')</span><span class="chip '+(a.status==='connected'?'ok':'err')+'">'+a.status+'</span>';
-        ae.appendChild(di);
-      });
+      var total=0;var list=document.getElementById('adapter-list');var adapters=d.adapters||[];
+      document.getElementById('adapter-count').textContent=adapters.length;
+      if(adapters.length===0){list.innerHTML='<div class="empty">暂无适配器</div>'}else{
+        list.innerHTML='';adapters.forEach(function(a){
+          total+=a.message_count||0;var item=document.createElement('div');item.className='list-item';
+          var st=a.status==='connected'?'ok':'err';var stText=a.status==='connected'?'已连接':'未连接';
+          item.innerHTML='<div class="icon">'+(a.name||'?').charAt(0).toUpperCase()+'</div><div class="info"><div class="name">'+a.name+'</div><div class="meta"><span>'+a.protocol+'</span><span>收:'+(a.received_count||0)+'</span><span>发:'+(a.sent_count||0)+'</span></div></div><span class="status '+st+'">'+stText+'</span>';
+          list.appendChild(item);
+        });
+      }
+      var now=Date.now(),dt=(now-prevTime)/1000/60;prevTime=now;
+      var rate=dt>0?Math.round((total-prevTotal)/dt):0;prevTotal=total;
+      document.getElementById('s-msgs').textContent=total;document.getElementById('s-rate').textContent=rate+' 条/分';
+      hist.push(rate);if(hist.length>30)hist.shift();
+      if(chart){chart.data.datasets[0].data=hist;chart.update('none')}
     });
     fetch('/api/metrics').then(function(r){return r.json()}).then(function(d){
       if(!d||!d.success)return;
-      document.getElementById('mem').textContent=(d.process&&typeof d.process.memory_mb==='number'?d.process.memory_mb.toFixed(1)+' MB':'-- MB');
-      document.getElementById('cpu').textContent=(d.process&&typeof d.process.cpu_percent==='number'?d.process.cpu_percent.toFixed(1)+'%':'--%');
-      document.getElementById('tasks').textContent=(d.tasks?d.tasks.total:0);
+      var mb=d.process&&d.process.memory_mb?d.process.memory_mb:0;document.getElementById('s-mem').textContent=mb.toFixed(0)+' MB';
+      if(d.system&&d.system.total_memory){var pct=(mb*1024*1024/d.system.total_memory*100).toFixed(1);document.getElementById('s-mem-pct').textContent='占用率 '+pct+'%'}
+      var cpu=d.process&&typeof d.process.cpu_percent==='number'?d.process.cpu_percent:0;document.getElementById('s-cpu').textContent=cpu.toFixed(1)+'%';
+      if(d.system&&d.system.cpu_count){document.getElementById('s-cpu-cores').textContent=d.system.cpu_count+' 核心'}
     }).catch(function(){});
   }
-  function initChart(){
-    var ctx=document.getElementById('chart').getContext('2d');
-    chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:'条/分钟',data:[],borderColor:'#D0BCFF',backgroundColor:'rgba(208,188,255,.1)',fill:true,tension:.3,pointRadius:0,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,animation:false,scales:{x:{display:false},y:{beginAtZero:true,ticks:{color:'#CAC4D0'},grid:{color:'rgba(73,69,79,.5)'}}},plugins:{legend:{display:false}}}});
-  }
-  function updateChart(){
-    if(!chart)return;
-    fetch('/api/status').then(function(r){return r.json()}).then(function(d){
-      var now=new Date().toLocaleTimeString();
-      var total=0;
-      (d.adapters||[]).forEach(function(a){total+=a.message_count||0});
-      hist.push({t:now,v:total});
-      if(hist.length>30)hist.shift();
-      chart.data.labels=hist.map(function(d){return d.t});
-      chart.data.datasets[0].data=hist.map(function(d){return d.v});
-      chart.update('none');
-    });
-  }
-  fetchStatus();setInterval(fetchStatus,3000);
-  initChart();setInterval(updateChart,10000);
+  initChart();fetchAll();setInterval(fetchAll,5000);
+  var socket=io();socket.on('message',addMsg);socket.on('metrics',function(d){if(d.message_count){document.getElementById('s-msgs').textContent=d.message_count;var now=Date.now(),dt=(now-prevTime)/1000/60;var rate=dt>0?Math.round((d.message_count-prevTotal)/dt):0;document.getElementById('s-rate').textContent=rate+' 条/分';prevTotal=d.message_count;prevTime=now;hist.push(rate);if(hist.length>30)hist.shift();if(chart)chart.data.datasets[0].data=hist;chart.update('none')}});
 })();
 </script></body></html>

@@ -63,7 +63,7 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
 </div>
 <script>
 (function(){
-  function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
+  function logout(){fetch('/api/logout',{method:'POST'}).finally(function(){localStorage.removeItem('qtine_auth');location.href='/webui/login'})}window.logout=logout
   document.getElementById('dev').textContent=navigator.platform||'未知';
   var tokenVisible=false;
   var tokenVal='';

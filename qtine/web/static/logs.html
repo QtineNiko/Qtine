@@ -55,7 +55,7 @@ select{padding:8px 12px;background:var(--sf);color:var(--on-s);border:1px solid 
 </div>
 <script>
 (function(){
-  function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
+  function logout(){fetch('/api/logout',{method:'POST'}).finally(function(){localStorage.removeItem('qtine_auth');location.href='/webui/login'})}window.logout=logout
   function load(){
     var lvl=document.getElementById('lvl').value;
     var log=document.getElementById('log');

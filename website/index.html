@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#000000">
+<title>Qtine — 模块化 QQ 机器人框架</title>
+<style>
+:root{
+  --bg:#000;
+  --surface:#0a0a0a;
+  --card:rgba(22,22,22,.6);
+  --card-solid:#161616;
+  --border:rgba(255,255,255,.08);
+  --border-hover:rgba(208,188,255,.25);
+  --text:#f5f5f7;
+  --text-secondary:#98989d;
+  --accent:#d0bcff;
+  --accent-glow:rgba(208,188,255,.06);
+  --green:#7dd78d;
+  --radius:24px;
+  --radius-sm:14px;
+  --max-width:1200px;
+}
+
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+
+html{scroll-behavior:smooth;background:var(--bg)}
+
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  line-height:1.5;
+  position:relative;
+}
+
+/* ── Scroll progress bar ── */
+.scroll-progress{position:fixed;top:0;left:0;height:2px;background:linear-gradient(90deg,var(--accent),#b89cf0);z-index:10001;width:0;transition:width .1s linear;border-radius:0 2px 2px 0}
+
+/* ── Page Loader ── */
+.page-loader{position:fixed;inset:0;z-index:20000;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity .6s,visibility .6s}
+.page-loader.hide{opacity:0;visibility:hidden;pointer-events:none}
+.loader-ring{width:80px;height:80px;position:relative}
+.loader-ring svg{width:100%;height:100%;animation:ringRotate 2s linear infinite}
+@keyframes ringRotate{to{transform:rotate(360deg)}}
+.loader-ring .circle{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-dasharray:200;stroke-dashoffset:200;animation:ringDraw 1.5s ease-in-out infinite}
+@keyframes ringDraw{0%{stroke-dashoffset:200}50%{stroke-dashoffset:40}100%{stroke-dashoffset:200}}
+.loader-text{margin-top:28px;font-size:28px;font-weight:700;letter-spacing:-1px;color:var(--text)}
+.loader-text span{color:var(--accent)}
+.loader-sub{font-size:13px;color:var(--text-secondary);margin-top:10px;letter-spacing:3px;text-transform:uppercase;animation:loaderBlink 1.5s ease-in-out infinite}
+@keyframes loaderBlink{0%,100%{opacity:.3}50%{opacity:1}}
+.loader-dots{display:flex;gap:6px;margin-top:24px}
+.loader-dots span{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:dotBounce 1.2s ease-in-out infinite}
+.loader-dots span:nth-child(2){animation-delay:.15s}
+.loader-dots span:nth-child(3){animation-delay:.3s}
+@keyframes dotBounce{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}
+
+/* ── Spotlight cursor ── */
+.spotlight{position:fixed;pointer-events:none;z-index:9998;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(208,188,255,.06),transparent 70%);transform:translate(-50%,-50%);opacity:0;transition:opacity .6s}
+.spotlight.active{opacity:1}
+
+/* ── Grain texture overlay ── */
+body::after{
+  content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+  opacity:.025;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Morphing blobs ── */
+.morph-blobs{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.morph-blob{position:absolute;border-radius:50%;filter:blur(100px);opacity:.08;animation:morphBlob 20s ease-in-out infinite}
+.morph-blob:nth-child(1){width:500px;height:500px;background:var(--accent);top:20%;left:60%;animation-delay:0s}
+.morph-blob:nth-child(2){width:400px;height:400px;background:#7dd78d;top:60%;left:10%;animation-delay:-7s}
+.morph-blob:nth-child(3){width:350px;height:350px;background:#ffb482;top:10%;left:20%;animation-delay:-14s}
+@keyframes morphBlob{
+  0%,100%{border-radius:60% 40% 30% 70%/60% 30% 70% 40%;transform:translate(0,0) scale(1)}
+  25%{border-radius:30% 60% 70% 40%/50% 60% 30% 60%;transform:translate(30px,-40px) scale(1.1)}
+  50%{border-radius:50% 50% 40% 60%/40% 70% 50% 60%;transform:translate(-20px,30px) scale(.95)}
+  75%{border-radius:40% 60% 50% 50%/60% 40% 60% 40%;transform:translate(20px,20px) scale(1.05)}
+}
+
+/* ── Floating geometry ── */
+.float-geo{position:absolute;pointer-events:none;z-index:0;opacity:.04;animation:floatGeo 12s ease-in-out infinite}
+.float-geo.triangle{width:0;height:0;border-left:30px solid transparent;border-right:30px solid transparent;border-bottom:52px solid var(--accent);animation-delay:-4s}
+.float-geo.square{width:40px;height:40px;border:2px solid var(--accent);border-radius:6px;animation-delay:-8s}
+.float-geo.circle{width:36px;height:36px;border:2px solid var(--accent);border-radius:50%;animation-delay:0s}
+@keyframes floatGeo{
+  0%,100%{transform:translateY(0) rotate(0deg)}
+  33%{transform:translateY(-20px) rotate(120deg)}
+  66%{transform:translateY(10px) rotate(240deg)}
+}
+
+/* ── Split text animation ── */
+.split-char{display:inline-block;opacity:0;transform:translateY(40px) rotateX(-40deg);animation:charReveal .6s ease-out forwards}
+@keyframes charReveal{to{opacity:1;transform:translateY(0) rotateX(0)}}
+
+/* ── Glass panel hover ── */
+.glass-panel{transition:all .5s cubic-bezier(.16,1,.3,1)}
+.glass-panel:hover{
+  background:rgba(255,255,255,.03);
+  backdrop-filter:blur(30px);
+  -webkit-backdrop-filter:blur(30px);
+  border-color:rgba(255,255,255,.12);
+}
+
+/* ── Shimmer sweep ── */
+.shimmer{position:relative;overflow:hidden}
+.shimmer::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.03),transparent 60%);
+  transform:translateX(-100%);
+  animation:shimmer 3s ease-in-out infinite paused;
+}
+.shimmer:hover::after{animation-play-state:running}
+@keyframes shimmer{to{transform:translateX(100%)}}
+
+/* ── Navigation ── */
+.nav{
+  position:fixed;top:0;left:0;right:0;z-index:1000;
+  padding:0 clamp(20px,4vw,40px);height:52px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .5s cubic-bezier(.16,1,.3,1);
+}
+.nav.scrolled{
+  background:rgba(0,0,0,.6);
+  backdrop-filter:saturate(180%) blur(24px);
+  -webkit-backdrop-filter:saturate(180%) blur(24px);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  height:48px;
+}
+.nav-inner{
+  width:100%;max-width:var(--max-width);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.nav-logo{
+  font-size:19px;font-weight:700;letter-spacing:-.5px;
+  color:var(--text);text-decoration:none;position:relative;z-index:2;
+}
+.nav-logo span{color:var(--accent)}
+.nav-links{display:flex;gap:36px;list-style:none}
+.nav-links a{
+  color:var(--text-secondary);text-decoration:none;
+  font-size:12px;font-weight:500;letter-spacing:.5px;
+  transition:color .3s;
+}
+.nav-links a:hover{color:var(--text)}
+
+/* ── Hero ── */
+.hero{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:clamp(80px,15vh,160px) 24px;
+  position:relative;overflow:hidden;
+}
+.hero-mesh{
+  position:absolute;inset:-50%;
+  background:
+    radial-gradient(ellipse 60% 50% at 30% 40%,rgba(180,160,255,.08),transparent 70%),
+    radial-gradient(ellipse 50% 60% at 70% 60%,rgba(208,188,255,.06),transparent 70%),
+    radial-gradient(ellipse 40% 40% at 50% 30%,rgba(160,200,255,.04),transparent 70%);
+  animation:meshShift 12s ease-in-out infinite;
+}
+@keyframes meshShift{
+  0%,100%{transform:translate(0,0) scale(1)}
+  33%{transform:translate(-2%,1%) scale(1.02)}
+  66%{transform:translate(1%,-1%) scale(.98)}
+}
+.hero-content{position:relative;z-index:2;max-width:860px}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:6px 16px;border-radius:980px;
+  background:rgba(208,188,255,.08);border:1px solid rgba(208,188,255,.15);
+  font-size:13px;color:var(--accent);margin-bottom:32px;
+  animation:fadeUp .8s ease-out both;
+}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hero h1{
+  font-size:clamp(48px,8vw,88px);font-weight:700;
+  letter-spacing:-3px;line-height:1.02;margin-bottom:24px;
+  animation:fadeUp .8s .1s ease-out both;
+  background:linear-gradient(180deg,#fff 0%,#e6e1e5 50%,#b8b0c0 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero h1 em{
+  font-style:normal;
+  background:linear-gradient(135deg,var(--accent),#b89cf0,#9b7de0);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero .tagline{
+  font-size:clamp(17px,2.2vw,22px);color:var(--text-secondary);
+  font-weight:400;letter-spacing:.2px;margin-bottom:52px;
+  animation:fadeUp .8s .2s ease-out both;
+}
+.hero-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;animation:fadeUp .8s .35s ease-out both}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:13px 30px;border-radius:980px;
+  font-size:15px;font-weight:500;text-decoration:none;
+  transition:all .35s cubic-bezier(.16,1,.3,1);cursor:pointer;border:none;
+}
+.btn svg{transition:transform .35s cubic-bezier(.16,1,.3,1)}
+.btn:hover svg{transform:translateX(2px)}
+.btn-primary{
+  background:var(--accent);color:#1d1a23;
+  box-shadow:0 0 40px rgba(208,188,255,.15);
+}
+.btn-primary:hover{background:#e4d6ff;box-shadow:0 0 60px rgba(208,188,255,.25);transform:scale(1.03)}
+.btn-outline{
+  background:rgba(255,255,255,.03);color:var(--text);
+  border:1px solid rgba(255,255,255,.12);
+  backdrop-filter:blur(10px);
+}
+.btn-outline:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25)}
+
+/* ── Sections ── */
+.section{padding:clamp(80px,12vw,160px) 24px;position:relative}
+.section-inner{max-width:var(--max-width);margin:0 auto;position:relative;z-index:2}
+.section-label{
+  font-size:12px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;
+  color:var(--accent);margin-bottom:20px;
+}
+.section-title{
+  font-size:clamp(36px,5vw,64px);font-weight:700;
+  letter-spacing:-2px;line-height:1.1;margin-bottom:24px;
+}
+.section-desc{font-size:18px;color:var(--text-secondary);max-width:560px;margin-bottom:clamp(48px,8vw,80px);line-height:1.65}
+
+/* ── Feature: Sticky showcase ── */
+.feature-showcase{
+  display:grid;grid-template-columns:1fr 1fr;gap:clamp(40px,8vw,100px);
+  align-items:center;margin-bottom:clamp(80px,10vw,140px);
+}
+.feature-showcase:last-child{margin-bottom:0}
+.fs-visual{
+  position:sticky;top:120px;align-self:start;
+}
+.fs-card{
+  background:var(--card-solid);border:1px solid var(--border);border-radius:var(--radius);
+  padding:48px 40px;position:relative;overflow:hidden;
+  backdrop-filter:blur(20px);
+}
+.fs-card::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 0%,var(--accent-glow),transparent 70%);
+  opacity:0;transition:opacity .6s;
+}
+.fs-card:hover::before{opacity:1}
+.fs-card .icon{
+  width:56px;height:56px;border-radius:var(--radius-sm);
+  background:linear-gradient(135deg,rgba(208,188,255,.15),rgba(208,188,255,.05));
+  display:flex;align-items:center;justify-content:center;margin-bottom:28px;
+  border:1px solid rgba(208,188,255,.15);
+}
+.fs-card .icon svg{width:26px;height:26px;color:var(--accent)}
+.fs-card h3{font-size:24px;font-weight:600;margin-bottom:12px;letter-spacing:-.5px}
+.fs-card p{font-size:15px;color:var(--text-secondary);line-height:1.7}
+
+.fs-texts{display:flex;flex-direction:column;gap:80px}
+.fs-text-block h3{
+  font-size:28px;font-weight:600;margin-bottom:14px;letter-spacing:-.5px;
+}
+.fs-text-block p{
+  font-size:16px;color:var(--text-secondary);line-height:1.7;
+}
+.fs-text-block .mini-stat{
+  display:inline-flex;align-items:baseline;gap:6px;
+  margin-top:20px;padding:10px 18px;
+  background:rgba(208,188,255,.06);border-radius:var(--radius-sm);
+  border:1px solid rgba(208,188,255,.1);
+}
+.fs-text-block .mini-stat .num{font-size:32px;font-weight:700;color:var(--accent)}
+.fs-text-block .mini-stat .unit{font-size:14px;color:var(--text-secondary)}
+
+/* ── Feature Cards Grid ── */
+.features-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:2px;
+  background:linear-gradient(135deg,transparent,rgba(255,255,255,.02));
+  perspective:1200px;
+}
+.feature-card{
+  background:var(--card);border:1px solid transparent;
+  border-radius:var(--radius);padding:44px 36px;
+  backdrop-filter:blur(20px);
+  transition:transform .1s ease-out,background .5s,border-color .5s;
+  position:relative;overflow:hidden;
+  transform-style:preserve-3d;
+}
+.feature-card::before{
+  content:'';position:absolute;inset:-1px;border-radius:inherit;
+  background:linear-gradient(135deg,rgba(255,255,255,.06),transparent 40%,transparent 60%,rgba(255,255,255,.03));
+  z-index:-1;transition:opacity .5s;
+}
+.feature-card::after{
+  content:'';position:absolute;inset:-2px;border-radius:inherit;
+  background:conic-gradient(from var(--angle,0deg),transparent,var(--accent),transparent 40%,transparent 60%,var(--accent),transparent);
+  z-index:-2;opacity:0;transition:opacity .4s;
+  animation:spinBorder 8s linear infinite paused;
+}
+.feature-card:hover::after{opacity:.4;animation-play-state:running}
+@keyframes spinBorder{to{--angle:360deg}}
+@property --angle{syntax:'<angle>';initial-value:0deg;inherits:false}
+.feature-card:hover{
+  border-color:rgba(255,255,255,.1);
+  background:rgba(28,28,30,.9);
+}
+.feature-card:hover::before{opacity:0}
+.feature-card:nth-child(1) .icon{background:linear-gradient(135deg,rgba(208,188,255,.2),rgba(208,188,255,.05))}
+.feature-card:nth-child(2) .icon{background:linear-gradient(135deg,rgba(160,200,255,.2),rgba(160,200,255,.05))}
+.feature-card:nth-child(3) .icon{background:linear-gradient(135deg,rgba(125,215,141,.2),rgba(125,215,141,.05))}
+.feature-card:nth-child(4) .icon{background:linear-gradient(135deg,rgba(255,180,130,.2),rgba(255,180,130,.05))}
+.feature-card:nth-child(5) .icon{background:linear-gradient(135deg,rgba(255,217,112,.2),rgba(255,217,112,.05))}
+.feature-card:nth-child(6) .icon{background:linear-gradient(135deg,rgba(255,150,180,.2),rgba(255,150,180,.05))}
+.feature-card .icon{
+  width:48px;height:48px;border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:24px;transition:transform .5s cubic-bezier(.16,1,.3,1);
+}
+.feature-card:hover .icon{transform:scale(1.08)}
+.feature-card .icon svg{width:22px;height:22px;color:var(--accent)}
+.feature-card:nth-child(2) .icon svg{color:#a0c8ff}
+.feature-card:nth-child(3) .icon svg{color:var(--green)}
+.feature-card:nth-child(4) .icon svg{color:#ffb482}
+.feature-card:nth-child(5) .icon svg{color:#ffd970}
+.feature-card:nth-child(6) .icon svg{color:#ff96b4}
+.feature-card h3{font-size:19px;font-weight:600;margin-bottom:10px;letter-spacing:-.3px}
+.feature-card p{font-size:14px;color:var(--text-secondary);line-height:1.65}
+
+/* ── Architecture ── */
+.arch-scene{
+  display:flex;align-items:center;justify-content:center;
+  gap:0;flex-wrap:wrap;padding:60px 0;
+  position:relative;
+}
+.arch-node{
+  background:var(--card-solid);border:1px solid var(--border);
+  border-radius:var(--radius);padding:28px 36px;text-align:center;
+  min-width:150px;transition:all .4s cubic-bezier(.16,1,.3,1);
+  position:relative;z-index:1;
+}
+.arch-node:hover{border-color:var(--accent);transform:translateY(-4px)}
+.arch-node.highlight{border-color:var(--accent);background:rgba(22,19,32,.9)}
+.arch-node .label{font-size:11px;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:1.5px}
+.arch-node .name{font-size:17px;font-weight:600}
+.arch-connector{
+  width:60px;display:flex;align-items:center;position:relative;z-index:0;
+}
+.arch-connector .line{
+  width:100%;height:1px;background:var(--border);position:relative;
+}
+.arch-connector .line::after{
+  content:'';position:absolute;right:-6px;top:-4px;
+  width:9px;height:9px;border-right:2px solid var(--accent);border-top:2px solid var(--accent);
+  transform:rotate(45deg);
+}
+.arch-connector.flow .line{
+  background:linear-gradient(90deg,var(--border),var(--accent),var(--border));
+  background-size:200% 100%;
+  animation:flowLine 2.5s ease-in-out infinite;
+}
+@keyframes flowLine{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── Stats Bar ── */
+.stats-bar{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:2px;margin-top:clamp(48px,8vw,80px);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.03),transparent);
+}
+.stat-item{padding:40px 24px;text-align:center}
+.stat-item .number{font-size:clamp(32px,5vw,52px);font-weight:700;letter-spacing:-1px;margin-bottom:6px}
+.stat-item .number .accent{color:var(--accent)}
+.stat-item .label{font-size:13px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px}
+
+/* ── Ecosystem Marquee ── */
+.marquee-wrap{overflow:hidden;margin-bottom:48px;mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent)}
+.marquee{
+  display:flex;gap:16px;width:max-content;
+  animation:marquee 30s linear infinite;
+}
+.marquee:hover{animation-play-state:paused}
+@keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.eco-badge{
+  padding:10px 22px;border-radius:980px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+  font-size:14px;font-weight:500;color:var(--text-secondary);
+  white-space:nowrap;transition:all .3s;
+}
+.eco-badge:hover{color:var(--accent);border-color:var(--accent);background:rgba(208,188,255,.08)}
+
+/* ── WebUI Showcase ── */
+.showcase-wrap{max-width:960px;margin:0 auto}
+.showcase-frame{
+  background:var(--card-solid);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.4);
+}
+.showcase-header{
+  padding:16px 20px;display:flex;gap:9px;align-items:center;
+  border-bottom:1px solid var(--border);
+}
+.showcase-dot{width:12px;height:12px;border-radius:50%}
+.showcase-dot:nth-child(1){background:#ff5f57}
+.showcase-dot:nth-child(2){background:#febc2e}
+.showcase-dot:nth-child(3){background:#28c840}
+.showcase-url{
+  margin-left:12px;font-size:11px;color:var(--text-secondary);
+  background:rgba(255,255,255,.04);padding:4px 14px;border-radius:6px;
+}
+.showcase-body{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
+  padding:28px;background:#08080a;
+}
+.showcase-card{
+  background:rgba(255,255,255,.025);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:24px;transition:all .3s;
+}
+.showcase-card:hover{border-color:rgba(255,255,255,.15);background:rgba(255,255,255,.04)}
+.showcase-card .s-icon{
+  width:32px;height:32px;border-radius:8px;margin-bottom:16px;
+  display:flex;align-items:center;justify-content:center;font-size:15px;
+}
+.showcase-card .s-title{font-size:13px;color:var(--text-secondary);margin-bottom:8px}
+.showcase-card .s-stat{font-size:32px;font-weight:700;margin-bottom:4px;letter-spacing:-1px}
+.showcase-card .s-sub{font-size:12px;color:var(--text-secondary)}
+
+/* ── Quick Start ── */
+.qs-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.code-block{
+  background:#161618;border:1px solid var(--border);border-radius:var(--radius);
+  padding:32px 36px;overflow-x:auto;position:relative;
+}
+.code-block::after{
+  content:'';position:absolute;top:0;right:0;width:120px;height:100%;
+  background:linear-gradient(90deg,transparent,#161618);
+  pointer-events:none;
+}
+.code-block .lang{
+  font-size:11px;color:var(--text-secondary);margin-bottom:20px;
+  text-transform:uppercase;letter-spacing:1.5px;
+}
+.code-block pre{font:400 13px/1.8 'SF Mono','Fira Code','Cascadia Code','Consolas',monospace;color:#ddd}
+.code-block .kw{color:#fc6399}
+.code-block .str{color:#7dd78d}
+.code-block .cm{color:#6c6c70}
+.copy-btn{
+  position:absolute;top:16px;right:24px;z-index:1;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+  color:var(--text-secondary);padding:6px 14px;border-radius:6px;
+  font-size:12px;cursor:pointer;transition:all .2s;
+}
+.copy-btn:hover{background:rgba(255,255,255,.12);color:var(--text)}
+
+.qs-cards{display:flex;flex-direction:column;gap:24px}
+.qs-card{
+  background:var(--card-solid);border:1px solid var(--border);border-radius:var(--radius);
+  padding:36px;transition:all .4s cubic-bezier(.16,1,.3,1);
+  text-decoration:none;color:inherit;display:block;
+}
+.qs-card:hover{border-color:var(--border-hover);transform:translateY(-4px)}
+.qs-card h3{font-size:20px;font-weight:600;margin-bottom:12px}
+.qs-card p{font-size:14px;color:var(--text-secondary);line-height:1.65}
+.qs-card .arrow{
+  display:inline-flex;align-items:center;gap:6px;color:var(--accent);
+  font-size:14px;font-weight:500;margin-top:20px;transition:gap .3s;
+}
+.qs-card:hover .arrow{gap:14px}
+
+/* ── Footer ── */
+.footer{padding:80px 24px 32px;border-top:1px solid var(--border)}
+.footer-inner{max-width:var(--max-width);margin:0 auto}
+.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:48px;margin-bottom:64px}
+.footer h4{font-size:12px;font-weight:600;color:var(--text);margin-bottom:18px;letter-spacing:1px;text-transform:uppercase}
+.footer a{display:block;color:var(--text-secondary);text-decoration:none;font-size:13px;margin-bottom:12px;transition:color .2s}
+.footer a:hover{color:var(--text)}
+.footer .brand-desc{font-size:14px;color:var(--text-secondary);line-height:1.6;margin-top:14px;max-width:260px}
+.footer .gh-stars{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 14px;border-radius:6px;background:rgba(255,255,255,.04);
+  border:1px solid var(--border);font-size:13px;margin-top:18px;
+  color:var(--text-secondary);
+}
+.footer-bottom{
+  padding-top:36px;border-top:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:12px;color:var(--text-secondary);
+}
+
+/* ── Reveal Animation ── */
+.reveal{
+  opacity:0;transform:translateY(36px);filter:blur(4px);
+  transition:all .9s cubic-bezier(.16,1,.3,1);
+}
+.reveal.visible{opacity:1;transform:translateY(0);filter:blur(0)}
+
+/* ── Parallax bg decoration ── */
+.section-bg{
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;
+}
+.section-bg .orb{
+  position:absolute;border-radius:50%;filter:blur(140px);opacity:.06;
+}
+.section-bg .orb:nth-child(1){width:600px;height:600px;background:var(--accent);top:-200px;left:-10%}
+.section-bg .orb:nth-child(2){width:400px;height:400px;background:#7dd78d;bottom:-100px;right:-5%;opacity:.04}
+
+/* ── Particle Canvas ── */
+#particles{position:absolute;inset:0;z-index:1;pointer-events:none}
+
+/* ── Responsive ── */
+@media(max-width:1024px){
+  .feature-showcase{grid-template-columns:1fr;gap:48px}
+  .fs-visual{position:static}
+  .features-grid{grid-template-columns:repeat(2,1fr)}
+  .stats-bar{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:768px){
+  .nav-links{display:none}
+  .section{padding:80px 20px}
+  .features-grid{grid-template-columns:1fr}
+  .qs-grid{grid-template-columns:1fr}
+  .showcase-body{grid-template-columns:1fr}
+  .footer-grid{grid-template-columns:1fr 1fr;gap:32px}
+  .arch-scene{flex-direction:column;gap:0}
+  .arch-connector{width:2px;height:40px}
+  .arch-connector .line{width:1px;height:100%}
+  .arch-connector .line::after{right:-4px;top:auto;bottom:-3px;transform:rotate(135deg)}
+}
+@media(max-width:480px){
+  .hero h1{font-size:38px}
+  .stats-bar{grid-template-columns:1fr 1fr}
+  .footer-grid{grid-template-columns:1fr}
+  .footer-bottom{flex-direction:column;gap:8px}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════ PAGE LOADER ════════ -->
+<div class="page-loader" id="loader">
+  <div class="loader-ring">
+    <svg viewBox="0 0 100 100"><circle class="circle" cx="50" cy="50" r="40"/></svg>
+  </div>
+  <div class="loader-text">Q<span>tine</span></div>
+  <div class="loader-sub">Initializing System</div>
+  <div class="loader-dots"><span></span><span></span><span></span></div>
+</div>
+
+<div class="spotlight" id="spotlight"></div>
+<div class="scroll-progress" id="scroll-progress"></div>
+
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">Q<span>tine</span></a>
+    <ul class="nav-links">
+      <li><a href="#features">特性</a></li>
+      <li><a href="#architecture">架构</a></li>
+      <li><a href="#ecosystem">生态</a></li>
+      <li><a href="#quickstart">快速开始</a></li>
+      <li><a href="https://github.com/QtineNiko/Qtine" target="_blank">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ════════ HERO ════════ -->
+<section class="hero" id="hero">
+  <canvas id="particles"></canvas>
+  <div class="hero-mesh"></div>
+  <div class="hero-content">
+    <h1>构建下一代<br><em>QQ 机器人</em></h1>
+    <p class="tagline">模块化 · 热加载 · 高性能 —— 用最简单的代码，构建最强大的 Bot</p>
+    <div class="hero-btns">
+      <a href="#quickstart" class="btn btn-primary">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        快速开始
+      </a>
+      <a href="https://github.com/QtineNiko/Qtine" target="_blank" class="btn btn-outline">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12 24 5.37 18.63 0 12 0z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ FEATURES ════════ -->
+<section class="section" id="features">
+  <div class="section-bg"><div class="orb"></div><div class="orb"></div></div>
+  <div class="morph-blobs">
+    <div class="morph-blob"></div>
+    <div class="morph-blob"></div>
+    <div class="morph-blob"></div>
+  </div>
+  <div class="float-geo triangle" style="top:15%;left:5%"></div>
+  <div class="float-geo square" style="top:70%;right:8%"></div>
+  <div class="float-geo circle" style="top:40%;right:15%"></div>
+  <div class="section-inner">
+    <div class="section-label reveal">核心特性</div>
+    <h2 class="section-title reveal">为效率而生</h2>
+    <p class="section-desc reveal">Qtine 将复杂性封装在框架内部，让你专注于业务逻辑。</p>
+
+    <!-- Sticky showcase 1 -->
+    <div class="feature-showcase">
+      <div class="fs-visual">
+        <div class="fs-card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div>
+          <h3>插件热加载</h3>
+          <p>拖入 .zip 即用，修改即生效——无需重启。每个插件独立沙箱运行，互不干扰。</p>
+        </div>
+      </div>
+      <div class="fs-texts">
+        <div class="fs-text-block reveal">
+          <h3>零重启开发体验</h3>
+          <p>写代码、保存、拖入 WebUI，插件即刻上线。热加载机制让你告别反复重启，迭代速度提升 10 倍。</p>
+          <div class="mini-stat"><span class="num">&lt; 1s</span><span class="unit">热加载耗时</span></div>
+        </div>
+        <div class="fs-text-block reveal">
+          <h3>三阶段消息管道</h3>
+          <p>预处理 → 处理 → 后处理，每一层都是可插拔的钩子。拦截黑名单、过滤关键词、注入上下文——所有操作都有明确的切入点。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sticky showcase 2 -->
+    <div class="feature-showcase" style="direction:rtl">
+      <div class="fs-texts" style="direction:ltr">
+        <div class="fs-text-block reveal">
+          <h3>WebUI 管理后台</h3>
+          <p>可视化仪表盘、插件一键启停、消息日志追踪、全局设置管理。不用敲命令，所有操作在浏览器完成。</p>
+          <div class="mini-stat"><span class="num">9</span><span class="unit">个管理页面</span></div>
+        </div>
+        <div class="fs-text-block reveal">
+          <h3>插件市场集成</h3>
+          <p>浏览、搜索、一键安装社区插件。支持多镜像源加速，自定义源配置，本地插件管理。</p>
+        </div>
+      </div>
+      <div class="fs-visual" style="direction:ltr">
+        <div class="fs-card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
+          <h3>WebUI 管理后台</h3>
+          <p>仪表盘、插件管理、消息日志、设置中心，一站式操作。深色主题，现代化设计。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full grid -->
+    <div class="features-grid reveal" style="margin-top:40px">
+      <div class="feature-card shimmer glass-panel">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg></div>
+        <h3>事件总线</h3>
+        <p>发布/订阅模式的事件系统，松耦合架构让插件协作更优雅。</p>
+      </div>
+      <div class="feature-card shimmer glass-panel">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
+        <h3>双协议 WebSocket</h3>
+        <p>同时支持反向 WS 与正向 WS，兼容 OneBot V11，适配任意 Bot 后端。</p>
+      </div>
+      <div class="feature-card shimmer glass-panel">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
+        <h3>插件市场</h3>
+        <p>一键安装社区插件，镜像源自动加速，支持官方源与自定义源。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ ARCHITECTURE ════════ -->
+<section class="section" id="architecture" style="background:var(--surface)">
+  <div class="section-inner">
+    <div class="section-label reveal">架构设计</div>
+    <h2 class="section-title reveal">清晰的数据流</h2>
+    <p class="section-desc reveal">消息从接收到回复，历经三阶段管道，每一层都可插拔、可扩展。</p>
+    <div class="arch-scene reveal">
+      <div class="arch-node"><div class="label">Stage 1</div><div class="name">消息接收</div></div>
+      <div class="arch-connector flow"><div class="line"></div></div>
+      <div class="arch-node"><div class="label">Stage 2</div><div class="name">预处理</div></div>
+      <div class="arch-connector flow"><div class="line"></div></div>
+      <div class="arch-node highlight"><div class="label">Stage 3</div><div class="name">插件管道</div></div>
+      <div class="arch-connector flow"><div class="line"></div></div>
+      <div class="arch-node"><div class="label">Stage 4</div><div class="name">后处理</div></div>
+      <div class="arch-connector flow"><div class="line"></div></div>
+      <div class="arch-node"><div class="label">Stage 5</div><div class="name">回复发送</div></div>
+    </div>
+    <div class="stats-bar reveal">
+      <div class="stat-item"><div class="number">&lt; <span class="accent count" data-target="50">50</span>ms</div><div class="label">消息处理延迟</div></div>
+      <div class="stat-item"><div class="number"><span class="accent count" data-target="6">6</span>+</div><div class="label">内置插件</div></div>
+      <div class="stat-item"><div class="number"><span class="accent count" data-target="100">100</span>%</div><div class="label">OneBot 兼容</div></div>
+      <div class="stat-item"><div class="number"><span class="accent count" data-target="24">24</span>/7</div><div class="label">持续运行</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ ECOSYSTEM ════════ -->
+<section class="section" id="ecosystem">
+  <div class="section-inner" style="text-align:center">
+    <div class="section-label reveal">插件生态</div>
+    <h2 class="section-title reveal">内置即强大</h2>
+    <p class="section-desc reveal" style="margin-left:auto;margin-right:auto">开箱自带实用插件，覆盖日常运营需求。配合插件市场，无限扩展。</p>
+  </div>
+  <div class="marquee-wrap reveal">
+    <div class="marquee" id="marquee">
+      <span class="eco-badge">#help 帮助系统</span>
+      <span class="eco-badge">#echo 消息复读</span>
+      <span class="eco-badge">#admin 远程管理</span>
+      <span class="eco-badge">#ban 用户封禁</span>
+      <span class="eco-badge">#repeat 复读检测</span>
+      <span class="eco-badge">#welcome 入群欢迎</span>
+      <span class="eco-badge">插件市场</span>
+      <span class="eco-badge">自定义插件</span>
+      <span class="eco-badge">热加载</span>
+      <span class="eco-badge">沙箱隔离</span>
+      <span class="eco-badge">#help 帮助系统</span>
+      <span class="eco-badge">#echo 消息复读</span>
+      <span class="eco-badge">#admin 远程管理</span>
+      <span class="eco-badge">#ban 用户封禁</span>
+      <span class="eco-badge">#repeat 复读检测</span>
+      <span class="eco-badge">#welcome 入群欢迎</span>
+      <span class="eco-badge">插件市场</span>
+      <span class="eco-badge">自定义插件</span>
+      <span class="eco-badge">热加载</span>
+      <span class="eco-badge">沙箱隔离</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ WEBUI ════════ -->
+<section class="section" id="webui" style="background:var(--surface)">
+  <div class="section-inner">
+    <div class="section-label reveal">管理后台</div>
+    <h2 class="section-title reveal">一切尽在掌控</h2>
+    <p class="section-desc reveal">简洁高效的 WebUI，实时监控、插件管理、消息日志追踪。</p>
+    <div class="showcase-wrap reveal">
+      <div class="showcase-frame">
+        <div class="showcase-header">
+          <div class="showcase-dot"></div><div class="showcase-dot"></div><div class="showcase-dot"></div>
+          <span class="showcase-url">localhost:4990/webui/dashboard</span>
+        </div>
+        <div class="showcase-body">
+          <div class="showcase-card">
+            <div class="s-icon" style="background:rgba(125,215,141,.12)">🟢</div>
+            <div class="s-title">在线 Bot</div>
+            <div class="s-stat" style="color:var(--green)">1</div>
+            <div class="s-sub">已连接 · OneBot V11</div>
+          </div>
+          <div class="showcase-card">
+            <div class="s-icon" style="background:rgba(208,188,255,.12)">🧩</div>
+            <div class="s-title">已加载插件</div>
+            <div class="s-stat" style="color:var(--accent)">6</div>
+            <div class="s-sub">5 内置 · 1 外部</div>
+          </div>
+          <div class="showcase-card">
+            <div class="s-icon" style="background:rgba(255,217,112,.12)">📨</div>
+            <div class="s-title">今日消息</div>
+            <div class="s-stat" style="color:#ffd970">1,247</div>
+            <div class="s-sub">↑ 12% vs 昨日</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ QUICK START ════════ -->
+<section class="section" id="quickstart">
+  <div class="section-inner">
+    <div class="section-label reveal">快速开始</div>
+    <h2 class="section-title reveal">一行命令跑起来</h2>
+    <p class="section-desc reveal">Python 3.8+ 即可运行，从安装到第一条消息只需 3 分钟。</p>
+    <div class="qs-grid">
+      <div class="code-block reveal">
+        <div class="lang">Terminal</div>
+        <button class="copy-btn" onclick="copyCode()">复制</button>
+        <pre id="code-content"><span class="cm"># 安装 Qtine</span>
+<span class="kw">pip</span> install qtine
+
+<span class="cm"># 初始化配置</span>
+<span class="kw">qtine</span> init
+
+<span class="cm"># 启动框架</span>
+<span class="kw">python</span> main.py
+
+<span class="cm"># 打开管理后台</span>
+<span class="cm"># → http://localhost:4990/webui</span></pre>
+      </div>
+      <div class="qs-cards">
+        <a href="https://github.com/QtineNiko/Qtine" target="_blank" class="qs-card reveal">
+          <h3>文档</h3>
+          <p>从零开始的 Qtine 开发指南，涵盖插件开发、配置说明与 API 参考。</p>
+          <span class="arrow">阅读文档 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+        </a>
+        <a href="https://github.com/QtineNiko/Qtine" target="_blank" class="qs-card reveal">
+          <h3>GitHub</h3>
+          <p>查看源码、提交 Issue、贡献代码。Qtine 完全开源，欢迎 Star。</p>
+          <span class="arrow">访问仓库 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ FOOTER ════════ -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div>
+        <div class="nav-logo" style="font-size:19px">Q<span>tine</span></div>
+        <p class="brand-desc">模块化 QQ 机器人框架，让 Bot 开发回归简单。</p>
+        <a class="gh-stars" href="https://github.com/QtineNiko/Qtine" target="_blank">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12 24 5.37 18.63 0 12 0z"/></svg>
+          Star on GitHub
+        </a>
+      </div>
+      <div>
+        <h4>产品</h4>
+        <a href="#features">特性</a>
+        <a href="#architecture">架构</a>
+        <a href="#ecosystem">插件生态</a>
+        <a href="#webui">管理后台</a>
+      </div>
+      <div>
+        <h4>资源</h4>
+        <a href="https://github.com/QtineNiko/Qtine" target="_blank">GitHub</a>
+        <a href="#quickstart">快速开始</a>
+        <a href="#">文档</a>
+      </div>
+      <div>
+        <h4>更多</h4>
+        <a href="#">MIT License</a>
+        <a href="#">OneBot V11</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Qtine. All rights reserved.</span>
+      <span>Built for QQ Bot Developers</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var nav=document.getElementById('nav');
+  var spotlight=document.getElementById('spotlight');
+  var progressBar=document.getElementById('scroll-progress');
+  var loader=document.getElementById('loader');
+  var canvas=document.getElementById('particles');
+  var ctx=canvas.getContext('2d');
+  var mx=0,my=0,sx=0,sy=0,scrollY=0,loaded=false;
+
+  // ── Page Loader: dismiss after animation ──
+  setTimeout(function(){
+    loader.classList.add('hide');
+    loaded=true;
+    setTimeout(function(){if(loader.parentNode)loader.remove()},700);
+  },2200);
+
+  // ── Particles ──
+  function resizeCanvas(){
+    var hero=document.getElementById('hero');
+    canvas.width=hero.offsetWidth;
+    canvas.height=hero.offsetHeight;
+  }
+  resizeCanvas();window.addEventListener('resize',resizeCanvas);
+  var particles=[];
+  for(var i=0;i<25;i++){
+    particles.push({
+      x:Math.random()*canvas.width,y:Math.random()*canvas.height,
+      r:Math.random()*1.5+.5,
+      vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25,
+      alpha:Math.random()*.5+.1
+    });
+  }
+
+  // ── Events ──
+  document.addEventListener('mousemove',function(e){mx=e.clientX;my=e.clientY;spotlight.classList.add('active')});
+  document.addEventListener('mouseleave',function(){spotlight.classList.remove('active')});
+  window.addEventListener('scroll',function(){scrollY=window.scrollY},{passive:true});
+
+  // ── Main loop ──
+  function loop(){
+    sx+=(mx-sx)*.08;sy+=(my-sy)*.08;
+    spotlight.style.left=sx+'px';spotlight.style.top=sy+'px';
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(var i=0;i<particles.length;i++){
+      var p=particles[i];p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0)p.x=canvas.width;if(p.x>canvas.width)p.x=0;
+      if(p.y<0)p.y=canvas.height;if(p.y>canvas.height)p.y=0;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle='rgba(208,188,255,'+p.alpha+')';ctx.fill();
+    }
+    document.querySelectorAll('.section-bg .orb').forEach(function(orb,i){
+      orb.style.transform='translateY('+(scrollY*(i+1)*.03)+'px)';
+    });
+    var mesh=document.querySelector('.hero-mesh');
+    if(mesh)mesh.style.transform='translateY('+(scrollY*.02)+'px)';
+    requestAnimationFrame(loop);
+  }
+  loop();
+
+  // ── Nav + progress ──
+  var ticking=false;
+  window.addEventListener('scroll',function(){
+    if(!ticking){
+      requestAnimationFrame(function(){
+        var s=scrollY;nav.classList.toggle('scrolled',s>60);
+        var h=document.documentElement.scrollHeight-window.innerHeight;
+        progressBar.style.width=h>0?(s/h*100)+'%':'0';
+        ticking=false;
+      });ticking=true;
+    }
+  });
+
+  // ── 3D Tilt + Magnetic ──
+  document.querySelectorAll('.feature-card,.fs-card').forEach(function(card){
+    card.addEventListener('mousemove',function(e){
+      var r=card.getBoundingClientRect();
+      card.style.transform='perspective(800px) rotateX('+((e.clientY-r.top-r.height/2)/r.height*-10)+'deg) rotateY('+((e.clientX-r.left-r.width/2)/r.width*10)+'deg)';
+    });
+    card.addEventListener('mouseleave',function(){card.style.transform=''});
+  });
+  document.querySelectorAll('.btn-primary,.btn-outline').forEach(function(btn){
+    btn.addEventListener('mousemove',function(e){
+      var r=btn.getBoundingClientRect();
+      btn.style.transform='translate('+((e.clientX-r.left-r.width/2)*.15)+'px,'+((e.clientY-r.top-r.height/2)*.15)+'px)';
+    });
+    btn.addEventListener('mouseleave',function(){btn.style.transform=''});
+  });
+
+  // ── Reveal on scroll ──
+  var observer=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target)}});
+  },{threshold:.12});
+  document.querySelectorAll('.reveal').forEach(function(el){observer.observe(el)});
+
+  // ── Counters ──
+   var countObs=new IntersectionObserver(function(entries){
+     entries.forEach(function(e){
+       if(!e.isIntersecting)return;
+       var el=e.target,t=parseInt(el.dataset.target),s=performance.now();
+       (function tick(n){
+         var p=Math.min((n-s)/1500,1);
+         el.textContent=Math.round((1-Math.pow(1-p,3))*t);
+         if(p<1)requestAnimationFrame(tick);
+       })(s);
+       countObs.unobserve(el);
+     });
+   },{threshold:.5});
+   document.querySelectorAll('.count').forEach(function(el){countObs.observe(el)});
+
+  // ── Copy ──
+  window.copyCode=function(){
+    navigator.clipboard.writeText(document.getElementById('code-content').innerText).then(function(){
+      var b=document.querySelector('.copy-btn');b.textContent='已复制!';
+      setTimeout(function(){b.textContent='复制'},2000);
+    });
+  };
+})();
+</script>
+</body>
+</html>

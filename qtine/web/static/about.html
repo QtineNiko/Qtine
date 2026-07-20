@@ -92,7 +92,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       <h2>开发团队</h2>
       <div class="contributors">
         <div class="contributor">
-          <div class="avatar">Q</div>
+          <img class="avatar" src="http://q1.qlogo.cn/g?b=qq&nk=3678555072&s=100" alt="QtineNiko">
           <div>
             <div class="name">QtineNiko</div>
             <div class="role">开发团队 · 主开发者</div>
@@ -102,16 +102,23 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       <h2 style="margin-top:18px">贡献者</h2>
       <div class="contributors">
         <div class="contributor">
-          <div class="avatar">白</div>
+          <img class="avatar" src="http://q1.qlogo.cn/g?b=qq&nk=3678555072&s=100" alt="安然">
           <div>
-            <div class="name">白然</div>
+            <div class="name">安然</div>
             <div class="role">贡献者</div>
           </div>
         </div>
         <div class="contributor">
-          <div class="avatar">三</div>
+          <img class="avatar" src="http://q1.qlogo.cn/g?b=qq&nk=3850524301&s=100" alt="三月七">
           <div>
             <div class="name">三月七</div>
+            <div class="role">贡献者</div>
+          </div>
+        </div>
+        <div class="contributor">
+          <img class="avatar" src="http://q1.qlogo.cn/g?b=qq&nk=1945826346&s=100" alt="Rcst20">
+          <div>
+            <div class="name">Rcst20</div>
             <div class="role">贡献者</div>
           </div>
         </div>
@@ -155,7 +162,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
 </div>
 <script>
 (function(){
-  function logout(){localStorage.removeItem('qtine_auth');location.href='/webui/login'}
+  function logout(){fetch('/api/logout',{method:'POST'}).finally(function(){localStorage.removeItem('qtine_auth');location.href='/webui/login'})}
   window.logout=logout;
   fetch('/api/status').then(function(r){return r.json()}).then(function(d){
     if(d&&d.version){document.getElementById('ver').textContent='v'+d.version}
