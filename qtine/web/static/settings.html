@@ -1,12 +1,15 @@
 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="theme-color" content="#141218"><title>Qtine 设置</title><style>
-:root{--p:#D0BCFF;--sc:#4A4458;--e:#F2B8B5;--bg:#141218;--sf:#211F26;--sfc:#2B2930;--on-s:#E6E1E5;--on-sv:#CAC4D0;--ol:#938F99;--olv:#49454F;--rad-s:8px;--rad-m:12px;--rad-l:16px;--rad-f:9999px;--elev1:0 1px 2px rgba(0,0,0,.3),0 1px 3px 1px rgba(0,0,0,.15);--tr:200ms cubic-bezier(.2,0,0,1);--mono:400 13px/20px 'Roboto Mono',monospace}
+:root{--p:#D0BCFF;--op:#381E72;--pc:#4F378B;--sc:#4A4458;--e:#F2B8B5;--su:#7DD78D;--w:#FFD970;--bg:#141218;--sf:#211F26;--sfc:#2B2930;--on-s:#E6E1E5;--on-sv:#CAC4D0;--ol:#938F99;--olv:#49454F;--rad-s:8px;--rad-m:12px;--rad-l:16px;--rad-f:9999px;--elev1:0 1px 2px rgba(0,0,0,.3),0 1px 3px 1px rgba(0,0,0,.15);--tr:200ms cubic-bezier(.2,0,0,1);--mono:400 13px/20px 'Roboto Mono',monospace}
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--on-s);font:400 14px/20px Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 .top-bar{display:flex;align-items:center;height:56px;padding:0 16px;background:var(--sf);border-bottom:1px solid var(--olv);flex-shrink:0}
 .top-bar .brand{font:400 22px/28px Roboto,sans-serif;flex:1;margin-left:12px}
 .top-bar .brand span{color:var(--p)}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:var(--rad-f);font:500 14px/20px Roboto,sans-serif;border:1px solid var(--ol);cursor:pointer;transition:all var(--tr);background:transparent;color:var(--p)}
-.btn:hover{background:rgba(208,188,255,.08)}.btn.danger{color:var(--e);border-color:var(--e)}.btn.danger:hover{background:rgba(242,184,181,.08)}
+.btn:hover{background:rgba(208,188,255,.08)}
+.btn.primary{background:var(--p);color:var(--op);border-color:transparent}
+.btn.primary:hover{background:#E9DDFF}
+.btn.danger{color:var(--e);border-color:var(--e)}.btn.danger:hover{background:rgba(242,184,181,.08)}
 .layout{display:flex;flex:1;overflow:hidden}
 .nav{width:72px;background:var(--sf);border-right:1px solid var(--olv);display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:2px;flex-shrink:0}
 .nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;width:60px;padding:10px 2px;border:none;border-radius:var(--rad-l);background:transparent;color:var(--on-sv);cursor:pointer;font:500 11px/16px Roboto,sans-serif;transition:all var(--tr);text-align:center;text-decoration:none}
@@ -20,6 +23,12 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
 .token-box code{font:var(--mono);color:var(--p);background:var(--sfc);padding:8px 12px;border-radius:var(--rad-s);flex:1;word-break:break-all;font-size:13px}
 .copy-btn{padding:8px 16px;border-radius:var(--rad-f);font:500 13px/18px Roboto,sans-serif;border:1px solid var(--ol);background:transparent;color:var(--p);cursor:pointer;white-space:nowrap}
 .copy-btn:hover{background:rgba(208,188,255,.08)}
+.toggle{position:relative;width:44px;height:24px;border-radius:var(--rad-f);background:var(--olv);cursor:pointer;transition:background var(--tr);flex-shrink:0}
+.toggle.on{background:var(--p)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--on-s);transition:transform var(--tr)}
+.toggle.on::after{transform:translateX(20px)}
+.snackbar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:#332D41;color:#F5EFF7;padding:12px 24px;border-radius:var(--rad-s);font:400 14px/20px Roboto,sans-serif;z-index:50;opacity:0;transition:all .4s var(--tr)}
+.snackbar.show{opacity:1;transform:translateX(-50%) translateY(0)}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--olv);border-radius:3px}
 @media(max-width:768px){.nav{width:56px}.nav-item{width:48px;padding:8px 1px;font-size:10px}.main{padding:12px}}
 </style><script src="/static/theme.js"></script></head><body>
@@ -58,18 +67,25 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
     <div class="card"><h3>服务器</h3><table id="srv-tbl"><tr><td>版本</td><td id="ver">--</td></tr><tr><td>设备</td><td id="dev">--</td></tr><tr><td>运行状态</td><td id="stat">--</td></tr><tr><td>运行时长</td><td id="up">--</td></tr></table></div>
     <div class="card"><h3>存储</h3><table><tr><td>后端</td><td>SQLite</td></tr><tr><td>路径</td><td>./data/qtine.db</td></tr></table></div>
     <div class="card"><h3>系统更新</h3><p style="font-size:13px;color:var(--on-sv);margin-bottom:8px">Qtine 核心版本更新，通过 GitHub Releases 获取，支持镜像加速。</p><table><tr><td>当前版本</td><td id="up-cur">--</td></tr><tr><td>最新版本</td><td id="up-latest">检查中...</td></tr><tr><td>状态</td><td id="up-status">--</td></tr></table><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center"><button class="btn" onclick="updateCheck()">检查更新</button><button class="btn" id="up-latest-btn" onclick="updateDownload('')" disabled>更新到最新</button><button class="btn" id="up-rollback-btn" onclick="showBackups()" disabled>回滚</button></div><div style="margin-top:10px"><span style="font-size:12px;color:var(--on-sv)">下载镜像源：</span><select id="up-mirror" style="padding:6px 12px;border-radius:var(--rad-f);border:1px solid var(--ol);background:var(--sfc);color:var(--on-s);font-size:13px;margin-left:6px"><option value="">官方源 (GitHub)</option></select><span id="mirror-test-btn" style="display:none;margin-left:8px;font-size:12px;color:var(--p);cursor:pointer" onclick="testMirrors()">测速</span></div><div style="margin-top:10px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:var(--on-sv);white-space:nowrap">更新检查代理：</span><input type="text" id="up-check-url" placeholder="留空则直连 GitHub API" style="flex:1;padding:6px 12px;border-radius:var(--rad-f);border:1px solid var(--ol);background:var(--sfc);color:var(--on-s);font-size:13px;outline:none"><button class="btn" onclick="saveCheckUrl()" style="padding:6px 14px;font-size:13px">保存</button></div><p style="font-size:11px;color:var(--ol);margin-top:4px">使用 jsDelivr CDN 获取 latest.json（国内可访问）：https://cdn.jsdelivr.net/gh/QtineNiko/Qtine@main/latest.json — 清空则回退直连 GitHub API。</p><div id="up-changelog" style="margin-top:12px;background:var(--sfc);border:1px solid var(--ol);border-radius:var(--rad-s);padding:12px;max-height:200px;overflow-y:auto;font-size:13px;line-height:1.6;display:none;white-space:pre-wrap"></div><div id="up-backups" style="margin-top:12px;display:none"></div><span id="up-msg" style="font-size:13px;color:var(--on-sv)"></span></div>
+    <div class="card"><h3>控制 API</h3><p style="font-size:13px;color:var(--on-sv);margin-bottom:12px">外部应用可通过控制 API 获取 Qtine 信息并控制 Qtine。开启后需设置强密码（包含大小写字母、数字和特殊符号）。</p><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span style="font-size:13px">状态</span><div class="toggle" id="ctrl-toggle" onclick="toggleControl()"></div><span id="ctrl-status" style="font-size:13px;color:var(--on-sv)">已关闭</span></div><div id="ctrl-password-wrap" style="display:none"><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="password" id="ctrl-pwd" placeholder="设置控制密码" style="flex:1;padding:8px 12px;border-radius:var(--rad-s);border:1px solid var(--ol);background:var(--bg);color:var(--on-s);font-size:13px;outline:none"><button class="btn" onclick="saveControlPassword()">保存密码</button></div><div id="ctrl-pwd-strength" style="font-size:12px;color:var(--on-sv);margin-bottom:8px"></div><p style="font-size:12px;color:var(--ol);margin-bottom:8px">密码要求：至少8位，包含大写字母、小写字母、数字和特殊符号</p><div style="background:var(--sfc);border:1px solid var(--olv);border-radius:var(--rad-s);padding:10px;font-size:12px;color:var(--on-sv)"><p style="margin-bottom:4px;font-weight:500;color:var(--on-s)">API 端点示例：</p><code style="color:var(--p);font-size:11px">GET /api/control/status</code><br><code style="color:var(--p);font-size:11px">POST /api/control/send</code><br><span style="color:var(--ol)">请求头携带 </span><code style="color:var(--p);font-size:11px">X-Control-Password: 你的密码</code></div></div></div>
     <div class="card"><h3>危险操作</h3><p style="font-size:13px;color:var(--on-sv);margin-bottom:12px">以下操作将影响正在运行的机器人进程。</p><div style="display:flex;gap:8px"><button class="btn danger" onclick="shutdown()">关闭机器人</button><button class="btn danger" onclick="restart()">重启机器人</button></div></div>
   </main>
 </div>
+<div class="snackbar" id="sb"></div>
 <script>
 (function(){
-  function logout(){fetch('/api/logout',{method:'POST'}).finally(function(){localStorage.removeItem('qtine_auth');location.href='/webui/login'})}window.logout=logout
+  function logout(){fetch('/api/logout',{method:'POST'}).finally(function(){localStorage.removeItem('qtine_auth');location.href='/webui/login'})}
+  window.logout=logout;
+  function toast(m){var s=document.getElementById('sb');s.textContent=m;s.classList.add('show');clearTimeout(s._t);s._t=setTimeout(function(){s.classList.remove('show')},3000)}
+  window.toast=toast;
+  // 401 检查辅助：返回 true 表示已通过，false 表示已触发登出
+  function chk(r){if(r.status===401){logout();return false}return true}
   document.getElementById('dev').textContent=navigator.platform||'未知';
   var tokenVisible=false;
   var tokenVal='';
   function loadToken(){
     fetch('/api/token').then(function(r){
-      if(r.status===401){logout();return}
+      if(!chk(r))return;
       return r.json()
     }).then(function(d){
       if(!d)return;
@@ -79,7 +95,10 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
     });
   }
   function loadStatus(){
-    fetch('/api/status').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/status').then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
       if(!d)return;
       document.getElementById('ver').textContent=d.version||'--';
       document.getElementById('stat').textContent=d.status==='running'?'运行中':'已停止';
@@ -93,13 +112,13 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
     document.getElementById('token').textContent=tokenVisible?tokenVal:tokenVal.replace(/./g,'*');
   };
   window.copyToken=function(){
-    navigator.clipboard.writeText(tokenVal).then(function(){alert('令牌已复制到剪贴板')});
+    navigator.clipboard.writeText(tokenVal).then(function(){toast('令牌已复制到剪贴板')});
   };
-  window.shutdown=function(){if(confirm('确定要关闭机器人吗？需要手动重新启动。')){fetch('/api/shutdown',{method:'POST'});alert('关闭信号已发送。')}};
-  window.restart=function(){if(confirm('确定要重启机器人吗？')){fetch('/api/restart',{method:'POST'});alert('重启信号已发送。')}};
+  window.shutdown=function(){if(confirm('确定要关闭机器人吗？需要手动重新启动。')){fetch('/api/shutdown',{method:'POST'}).then(function(r){if(!chk(r))return;toast('关闭信号已发送')})}};
+  window.restart=function(){if(confirm('确定要重启机器人吗？')){fetch('/api/restart',{method:'POST'}).then(function(r){if(!chk(r))return;toast('重启信号已发送')})}};
   function loadAdmins(){
     fetch('/api/security/admins').then(function(r){
-      if(r.status===401){logout();return}
+      if(!chk(r))return;
       return r.json()
     }).then(function(d){
       if(!d)return;
@@ -111,7 +130,11 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
     var ta=document.getElementById('admins-ta');
     var raw=ta.value||'';
     var list=raw.split(/[\n,，]/).map(function(s){return s.trim()}).filter(function(s){return s.length>0});
-    fetch('/api/security/admins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admins:list})}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/security/admins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admins:list})}).then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       var msg=document.getElementById('admins-msg');
       if(d&&d.success){msg.textContent='已保存';ta.value=(d.admins||[]).join('\n');setTimeout(function(){msg.textContent=''},2000)}
       else{msg.textContent='保存失败：'+(d&&d.error?d.error:'未知错误')}
@@ -120,7 +143,10 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
   // ── 主题定制 ──────────────────────────────────────────────
   var CURRENT_THEME='';
   function loadThemes(){
-    fetch('/api/themes').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/themes').then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
       if(!d)return;
       CURRENT_THEME=d.current||'';
       renderThemes(d.builtin||[],d.imported||[]);
@@ -175,7 +201,11 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
     return card;
   }
   function switchTheme(name){
-    fetch('/api/themes/current',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/themes/current',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})}).then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       var msg=document.getElementById('theme-msg');
       if(d&&d.success){
         CURRENT_THEME=name;
@@ -192,7 +222,11 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
   }
   function deleteTheme(name){
     if(!confirm('确定要删除主题 "'+name+'" 吗？'))return;
-    fetch('/api/themes/'+encodeURIComponent(name),{method:'DELETE'}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/themes/'+encodeURIComponent(name),{method:'DELETE'}).then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       var msg=document.getElementById('theme-msg');
       if(d&&d.success){
         msg.textContent='已删除';
@@ -211,7 +245,11 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
     var msg=document.getElementById('theme-msg');
     msg.textContent='正在导入 '+f.name+' ...';
     msg.style.color='var(--on-sv)';
-    fetch('/api/themes/import',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/themes/import',{method:'POST',body:fd}).then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       if(d&&d.success){
         msg.textContent='主题 '+d.name+' 导入成功';
         msg.style.color='var(--su)';
@@ -234,7 +272,10 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
   function updateCheck(silent){
     var msg=document.getElementById('up-msg');
     if(!silent){msg.textContent='正在检查...';msg.style.color='var(--on-sv)'}
-    fetch('/api/update/check').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/update/check').then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
       if(!d)return;
       document.getElementById('up-cur').textContent=d.current||'--';
       if(d.has_update&&d.latest){
@@ -259,6 +300,7 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
       if(!silent){msg.textContent='检查失败';msg.style.color='var(--e)'}
     });
   }
+  window.updateCheck=updateCheck;
   function updateDownload(tag){
     var v=tag||UP_LATEST_TAG;
     if(!v){toast('请先检查更新');return}
@@ -267,7 +309,11 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
     var msg=document.getElementById('up-msg');
     msg.textContent='正在下载并安装 '+v+' ...';msg.style.color='var(--on-sv)';
     document.getElementById('up-latest-btn').disabled=true;
-    fetch('/api/update/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:v,mirror:mirror||undefined})}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/update/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:v,mirror:mirror||undefined})}).then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       if(d&&d.success){
         msg.textContent=d.message||'更新完成';msg.style.color='var(--su)';
         loadBackupStatus();
@@ -282,8 +328,13 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
       document.getElementById('up-latest-btn').disabled=false;
     });
   }
+  window.updateDownload=updateDownload;
   function showBackups(){
-    fetch('/api/update/backups').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/update/backups').then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       var box=document.getElementById('up-backups');
       var backups=d.backups||[];
       if(backups.length===0){box.innerHTML='<p style="font-size:12px;color:var(--on-sv)">暂无备份</p>';box.style.display='';return}
@@ -294,11 +345,16 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
       box.innerHTML=html;box.style.display='';
     });
   }
+  window.showBackups=showBackups;
   function rollbackTo(ver){
     if(!confirm('确定要回滚到 '+ver+' 吗？回滚后请重启。'))return;
     var msg=document.getElementById('up-msg');
     msg.textContent='正在回滚到 '+ver+' ...';msg.style.color='var(--on-sv)';
-    fetch('/api/update/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:ver})}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/update/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:ver})}).then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       if(d&&d.success){
         msg.textContent=d.message||'回滚完成';msg.style.color='var(--su)';
         updateCheck(true);
@@ -308,15 +364,23 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
       }
     });
   }
+  window.rollbackTo=rollbackTo;
   function loadBackupStatus(){
-    fetch('/api/update/backups').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/update/backups').then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       var btn=document.getElementById('up-rollback-btn');
       btn.disabled=(d.backups||[]).length===0;
     });
   }
-  function toast(m){alert(m)}
   function loadMirrors(){
-    fetch('/api/update/mirrors').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/update/mirrors').then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       var sel=document.getElementById('up-mirror');
       // 保留首选项（官方源为默认），清空其余
       sel.innerHTML='<option value="">官方源 (GitHub)</option>';
@@ -370,7 +434,11 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
 
   // ── 更新检查代理 URL ──────────────────────────────────────
   function loadCheckUrl(){
-    fetch('/api/update/check-url').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/update/check-url').then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       var input=document.getElementById('up-check-url');
       if(d.url){
         input.value=d.url;
@@ -385,7 +453,11 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
   }
   window.saveCheckUrl=function(){
     var url=document.getElementById('up-check-url').value.trim();
-    fetch('/api/update/check-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/update/check-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})}).then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       if(d&&d.success){
         toast('更新检查 URL 已保存');
         updateCheck(true);
@@ -394,5 +466,60 @@ table{width:100%;border-collapse:collapse}td{padding:8px 12px;font-size:13px;bor
       }
     }).catch(function(){toast('保存失败')});
   };
+
+  // ── 控制 API ──────────────────────────────────────────────────
+  var ctrlEnabled=false;
+  function loadControlSettings(){
+    fetch('/api/settings').then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d||!d.settings)return;
+      var cfg=d.settings['api_control']||{};
+      ctrlEnabled=cfg.enabled||false;
+      updateControlUI();
+    });
+  }
+  function updateControlUI(){
+    var toggle=document.getElementById('ctrl-toggle');
+    var status=document.getElementById('ctrl-status');
+    var wrap=document.getElementById('ctrl-password-wrap');
+    if(ctrlEnabled){toggle.classList.add('on');status.textContent='已开启';status.style.color='var(--su)';wrap.style.display=''}else{toggle.classList.remove('on');status.textContent='已关闭';status.style.color='var(--on-sv)';wrap.style.display='none'}
+  }
+  window.toggleControl=function(){
+    ctrlEnabled=!ctrlEnabled;
+    fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({'api_control.enabled':ctrlEnabled})}).then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
+      if(d&&d.success){updateControlUI();toast(ctrlEnabled?'控制 API 已开启':'控制 API 已关闭')}else{toast('设置失败');ctrlEnabled=!ctrlEnabled;updateControlUI()}
+    });
+  };
+  function checkPasswordStrength(pwd){
+    var s='';
+    if(pwd.length<8){s='密码太短（至少8位）'}
+    else if(!/[A-Z]/.test(pwd)){s='缺少大写字母'}
+    else if(!/[a-z]/.test(pwd)){s='缺少小写字母'}
+    else if(!/\d/.test(pwd)){s='缺少数字'}
+    else if(!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/.test(pwd)){s='缺少特殊符号'}
+    else{s='密码强度合格'}
+    var el=document.getElementById('ctrl-pwd-strength');
+    el.textContent=s;el.style.color=s==='密码强度合格'?'var(--su)':'var(--w)';
+    return s==='密码强度合格';
+  }
+  document.getElementById('ctrl-pwd').addEventListener('input',function(){checkPasswordStrength(this.value)});
+  window.saveControlPassword=function(){
+    var pwd=document.getElementById('ctrl-pwd').value;
+    if(!checkPasswordStrength(pwd)){toast('密码不符合要求');return}
+    fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({'api_control.password':pwd})}).then(function(r){
+      if(!chk(r))return;
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
+      if(d&&d.success){toast('控制密码已保存');document.getElementById('ctrl-pwd').value=''}else{toast('保存失败')}
+    });
+  };
+  loadControlSettings();
 })();
 </script></body></html>

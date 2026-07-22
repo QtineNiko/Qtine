@@ -227,7 +227,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
         mirrorSpan.innerHTML=mirrors.map(function(m, i){
           var label=m.name||m.url||m;
           var u=(typeof m==='string')?m:(m.url||'');
-          return '<span class="mirror-item" title="'+u+'">'+(label||u)+'</span>';
+          return '<span class="mirror-item" title="'+escapeHtml(u)+'">'+escapeHtml(label||u)+'</span>';
         }).join('');
       }else{
         divider.style.display='none';
@@ -357,7 +357,11 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       var name=b.dataset.name;
       if(!confirm('确定要卸载 "'+name+'" 吗？'))return;
       b.disabled=true;b.textContent='卸载中...';
-      fetch('/api/plugins/'+encodeURIComponent(name)+'/uninstall',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+      fetch('/api/plugins/'+encodeURIComponent(name)+'/uninstall',{method:'POST'}).then(function(r){
+        if(r.status===401){logout();return}
+        return r.json()
+      }).then(function(d){
+        if(!d)return;
         if(d&&d.success){toast('插件 '+name+' 已卸载');load()}
         else{toast('卸载失败: '+(d&&d.error?d.error:'未知错误'));b.disabled=false;b.textContent='卸载'}
       }).catch(function(){toast('卸载失败');b.disabled=false;b.textContent='卸载'});
@@ -368,7 +372,11 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     if(!confirm('确定要从 GitHub 官方源安装 "'+name+'" 吗？'))return;
     b.disabled=true;b.textContent='安装中...';
     toast('正在从 GitHub 官方源安装 '+name+' ...');
-    fetch('/api/market/install/'+encodeURIComponent(name),{method:'POST'}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/market/install/'+encodeURIComponent(name),{method:'POST'}).then(function(r){
+      if(r.status===401){logout();return}
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       if(d.success){toast('插件 '+d.name+' 安装成功');load()}
       else{toast('安装失败: '+(d.error||'未知错误'));b.disabled=false;b.textContent='安装'}
     }).catch(function(){toast('安装失败');b.disabled=false;b.textContent='安装'});
@@ -376,7 +384,11 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
 
   // Source modal
   window.openSourceModal=function(){
-    fetch('/api/market/source').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/market/source').then(function(r){
+      if(r.status===401){logout();return}
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       document.getElementById('src-input').value=d.url||'';
       var mirrors=d.mirrors||[];
       var lines=mirrors.map(function(m){
@@ -406,7 +418,11 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
         }
       });
     }
-    fetch('/api/market/source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,mirrors:mirrors})}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/market/source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,mirrors:mirrors})}).then(function(r){
+      if(r.status===401){logout();return}
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       if(d.success){toast('源已保存');closeSourceModal();load()}
       else{toast('保存失败: '+(d.error||'未知错误'))}
     }).catch(function(){toast('保存失败')});
@@ -431,7 +447,11 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     }}
     document.getElementById('detail-readme').textContent='加载中...';
     document.getElementById('detail-modal').classList.add('show');
-    fetch('/api/market/plugins/'+encodeURIComponent(p.name)+'/readme').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/market/plugins/'+encodeURIComponent(p.name)+'/readme').then(function(r){
+      if(r.status===401){logout();return}
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       if(d&&d.readme){
         document.getElementById('detail-readme').innerHTML=formatMarkdown(d.readme);
       }else{
@@ -467,23 +487,33 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     s=escapeHtml(s);
     s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
     s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
-    s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+    s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,function(m,text,url){
+      if(/^https?:\/\//i.test(url)){
+        return '<a href="'+url+'" target="_blank">'+text+'</a>';
+      }
+      return text;
+    });
     return s;
   }
   function escapeHtml(s){
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   window.uploadPlugin=function(input){
     var f=input.files[0];if(!f)return;
     var fd=new FormData();fd.append('file',f);
     toast('正在导入 '+f.name+' ...');
-    fetch('/api/plugins/upload',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/plugins/upload',{method:'POST',body:fd}).then(function(r){
+      if(r.status===401){logout();return}
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       if(d.success){toast('插件 '+d.name+' 导入成功');load()}else{toast('导入失败: '+(d.error||'未知错误'))}
     }).catch(function(){toast('导入失败')});
     input.value='';
   };
 
+  window.load=load;
   load();
 })();
 </script></body></html>

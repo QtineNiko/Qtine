@@ -1,0 +1,20 @@
+{
+  "name": "my_adapter",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "description": "My custom adapter for Qtine",
+  "protocol": "my_protocol",
+  "entry": "adapter.py",
+  "config": {
+    "api_key": {
+      "type": "string",
+      "required": true,
+      "description": "API Key for authentication"
+    },
+    "base_url": {
+      "type": "string",
+      "default": "https://api.example.com",
+      "description": "Base URL of the API"
+    }
+  }
+}

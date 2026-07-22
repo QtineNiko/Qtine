@@ -11,6 +11,8 @@ import threading
 import json
 import shutil
 import zipfile
+import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Dict
 from urllib.parse import urlparse
 
@@ -31,6 +33,7 @@ from qtine.core.session import SessionManager
 from qtine.core.plugin_manager import PluginManager
 from qtine.core.adapter_manager import AdapterManager
 from qtine.core.scheduler import TaskScheduler
+from qtine.core.control_api import register_control_routes
 from qtine.core.updater import (
     find_update,
     find_release_by_tag,
@@ -160,7 +163,6 @@ class QtineBot:
         self.pipeline = MessagePipeline()
         self.session_manager = SessionManager()
         self.plugin_manager = PluginManager()
-        self.adapter_manager = AdapterManager()
         self.scheduler = TaskScheduler()
         self.scheduler.set_bot(self)
         self._start_time = time.time()
@@ -168,6 +170,12 @@ class QtineBot:
         # rate limiting state: {user_id: [timestamps]}
         self._rate_buckets: dict = {}
         self._rate_lock = threading.Lock()
+        # Thread pool for concurrent message processing
+        worker_count = self.config.get("concurrency.workers", 8)
+        self._executor = ThreadPoolExecutor(
+            max_workers=worker_count,
+            thread_name_prefix="qtine_worker"
+        )
 
         self.plugin_manager.set_bot(self)
         self.plugin_manager.set_plugin_dir(
@@ -180,6 +188,8 @@ class QtineBot:
                 "storage.sqlite_path", "./data/qtine.db"
             ),
         )
+
+        self.adapter_manager = AdapterManager(storage=self.storage)
 
         self._setup_pipeline()
 
@@ -296,6 +306,10 @@ class QtineBot:
         pipeline.post(post_repeat)
 
     def handle_message(self, message: Message):
+        """Submit message processing to thread pool for concurrency."""
+        self._executor.submit(self._process_message, message)
+
+    def _process_message(self, message: Message):
         sender_name = (
             message.sender.nickname if message.sender else "?"
         )
@@ -541,6 +555,7 @@ class QtineBot:
 
     def start(self):
         self._running = True
+        self.adapter_manager.start_all()
         self.scheduler.start()
         self.event_bus.publish("bot.started", {"time": time.time()})
         self.logger.info("Qtine bot started")
@@ -550,6 +565,7 @@ class QtineBot:
         self.scheduler.stop()
         self.event_bus.publish("bot.stopped", {"time": time.time()})
         self.adapter_manager.stop_all()
+        self._executor.shutdown(wait=False)
         self.storage.close()
         self.logger.info("Qtine bot shutdown complete")
 
@@ -608,7 +624,6 @@ class QtineApp:
 
         self._login_buckets: Dict[str, list] = {}
         self._login_lock = threading.Lock()
-        self._validate_production_config()
         self._init_token()
         os.makedirs(UPLOAD_DIR, mode=0o700, exist_ok=True)
         os.makedirs(THEMES_DIR, mode=0o700, exist_ok=True)
@@ -625,6 +640,7 @@ class QtineApp:
         )
 
         self.bot = QtineBot(self.config)
+        self._validate_production_config()
         self._adapter_ws_paths: Dict[str, str] = (
             {}
         )  # adapter_name -> ws_path
@@ -643,13 +659,15 @@ class QtineApp:
         errors = []
         if self.config.get("server.debug", False):
             errors.append("server.debug must be false")
-        onebot = self.config.get("adapters.onebot_v11", {}) or {}
-        onebot_token = (
-            os.environ.get("QTINE_ONEBOT_ACCESS_TOKEN", "").strip()
-            or str(onebot.get("access_token", "")).strip()
-        )
-        if onebot.get("enabled", False) and len(onebot_token) < 16:
-            errors.append("OneBot access token must be at least 16 characters")
+        # Warn about adapters without tokens (not fatal)
+        for adapter in self.bot.adapter_manager.get_all():
+            if not adapter.enabled:
+                continue
+            token = adapter.info.token or adapter.config.get("token") or adapter.config.get("access_token", "")
+            if adapter.protocol == "onebot_v11":
+                token = os.environ.get("QTINE_ONEBOT_ACCESS_TOKEN", "").strip() or token
+            if token and len(str(token).strip()) < 8:
+                errors.append(f"Adapter '{adapter.name}' token must be at least 8 characters")
         admin_token = os.environ.get("QTINE_ADMIN_TOKEN", "").strip()
         if os.environ.get("QTINE_MANAGED_SERVER") == "1" and len(admin_token) < 32:
             errors.append("QTINE_ADMIN_TOKEN must be at least 32 characters")
@@ -2048,18 +2066,93 @@ class QtineApp:
                 info = adapter.info
                 bot_info = getattr(adapter, "_bot_info", {})
                 adapters_info.append({
+                    "id": info.id,
                     "name": info.name,
                     "protocol": info.protocol,
                     "status": info.status.value,
+                    "enabled": info.enabled,
                     "message_count": info.message_count,
                     "received_count": info.received_count,
                     "sent_count": info.sent_count,
                     "error_count": info.error_count,
                     "account_id": info.account_id,
-                    "nickname": bot_info.get("nickname", ""),
+                    "nickname": info.nickname or bot_info.get("nickname", ""),
+                    "remark": info.remark,
+                    "config": info.config,
+                    "ws_port": info.ws_port,
+                    "token": "***" if info.token else "",
+                    "builtin": info.builtin,
                     "connected_at": info.connected_at,
                 })
             return jsonify(adapters_info)
+
+        @app.route("/api/adapters/protocols")
+        def api_adapter_protocols():
+            return jsonify(bot.adapter_manager.get_builtin_protocols())
+
+        @app.route("/api/adapters", methods=["POST"])
+        def api_adapter_create():
+            data = request.get_json() or {}
+            protocol = data.get("protocol")
+            name = data.get("name")
+            if not protocol:
+                return jsonify({"success": False, "error": "protocol required"}), 400
+            adapter = bot.adapter_manager.create_adapter(
+                protocol=protocol,
+                name=name,
+                config=data.get("config", {}),
+                remark=data.get("remark", ""),
+                ws_port=data.get("ws_port", 0),
+                token=data.get("token", ""),
+                enabled=data.get("enabled", True),
+            )
+            if adapter:
+                return jsonify({"success": True, "name": adapter.name})
+            return jsonify({"success": False, "error": "Failed to create adapter"}), 400
+
+        @app.route("/api/adapters/<name>", methods=["DELETE"])
+        def api_adapter_delete(name):
+            if bot.adapter_manager.remove(name):
+                return jsonify({"success": True})
+            return jsonify({"success": False, "error": "Not found"}), 404
+
+        @app.route("/api/adapters/<name>/config", methods=["PUT"])
+        def api_adapter_update(name):
+            data = request.get_json() or {}
+            if bot.adapter_manager.update_config(
+                name,
+                config=data.get("config"),
+                remark=data.get("remark"),
+                ws_port=data.get("ws_port"),
+                token=data.get("token"),
+                enabled=data.get("enabled"),
+            ):
+                return jsonify({"success": True})
+            return jsonify({"success": False, "error": "Not found"}), 404
+
+        @app.route("/api/adapters/<name>/start", methods=["POST"])
+        def api_adapter_start(name):
+            if bot.adapter_manager.start(name):
+                return jsonify({"success": True})
+            return jsonify({"success": False, "error": "Failed to start"}), 400
+
+        @app.route("/api/adapters/<name>/stop", methods=["POST"])
+        def api_adapter_stop(name):
+            if bot.adapter_manager.stop(name):
+                return jsonify({"success": True})
+            return jsonify({"success": False, "error": "Failed to stop"}), 400
+
+        @app.route("/api/adapters/<name>/enable", methods=["POST"])
+        def api_adapter_enable(name):
+            if bot.adapter_manager.enable(name):
+                return jsonify({"success": True})
+            return jsonify({"success": False, "error": "Not found"}), 404
+
+        @app.route("/api/adapters/<name>/disable", methods=["POST"])
+        def api_adapter_disable(name):
+            if bot.adapter_manager.disable(name):
+                return jsonify({"success": True})
+            return jsonify({"success": False, "error": "Not found"}), 404
 
         @app.route("/api/adapters/<name>/reconnect", methods=["POST"])
         def api_adapter_reconnect(name):
@@ -2577,36 +2670,67 @@ class QtineApp:
             ).start()
             return jsonify({"success": True})
 
+        # ── control API ────────────────────────────────────────────────
+        register_control_routes(app, lambda: self.bot)
+
+        # ── settings API ───────────────────────────────────────────────
+
+        @app.route("/api/settings", methods=["GET"])
+        def api_settings_get():
+            return jsonify({"success": True, "settings": self.bot.config.data})
+
+        @app.route("/api/settings", methods=["PUT"])
+        def api_settings_put():
+            data = request.get_json() or {}
+            for key, value in data.items():
+                # Support dotted keys like 'api_control.enabled'
+                self.bot.config.set(key, value)
+            try:
+                self.bot.config.save()
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e)}), 500
+            return jsonify({"success": True})
+
     # ── adapter setup ────────────────────────────────────────────────
 
     def _setup_adapters(self):
-        # OneBot V11 (built-in)
+        # OneBot V11 (built-in) - auto-create from config if not exists
         onebot_config = dict(
             self.config.get("adapters.onebot_v11", {}) or {}
         )
         env_token = os.environ.get("QTINE_ONEBOT_ACCESS_TOKEN", "").strip()
         if env_token:
             onebot_config["access_token"] = env_token
+
+        # Auto-create OneBot adapter if enabled in config
         if onebot_config.get("enabled", False):
-            adapter = self.bot.adapter_manager.create_onebot_adapter(
-                onebot_config, bot=self.bot
-            )
-            adapter.on_message(self.bot.handle_message)
-            adapter.on_event(
-                lambda event_type, data: self.bot.event_bus.publish(
-                    f"adapter.onebot_v11.{event_type}", data
+            existing = self.bot.adapter_manager.get("onebot_v11")
+            if existing is None:
+                self.bot.adapter_manager.create_adapter(
+                    protocol="onebot_v11",
+                    name="onebot_v11",
+                    config=onebot_config,
+                    remark="Auto-created from config",
+                    enabled=True,
                 )
-            )
-            ws_path = str(onebot_config.get("ws_path", "/onebot/v11"))
-            if not ws_path.startswith("/"):
-                ws_path = f"/{ws_path}"
-            self._register_adapter_ws_endpoint(
-                "onebot_v11", ws_path, adapter
-            )
-            adapter.start()
-            self.logger.info(
-                f"OneBot v11 adapter: WS={ws_path}"
-            )
+                existing = self.bot.adapter_manager.get("onebot_v11")
+            if existing:
+                existing.on_message(self.bot.handle_message)
+                existing.on_event(
+                    lambda event_type, data: self.bot.event_bus.publish(
+                        f"adapter.onebot_v11.{event_type}", data
+                    )
+                )
+                ws_path = str(onebot_config.get("ws_path", "/onebot/v11"))
+                if not ws_path.startswith("/"):
+                    ws_path = f"/{ws_path}"
+                self._register_adapter_ws_endpoint(
+                    "onebot_v11", ws_path, existing
+                )
+                existing.start()
+                self.logger.info(
+                    f"OneBot v11 adapter: WS={ws_path}"
+                )
 
     def _register_adapter_ws(self, adapter_name: str) -> None:
         """Auto-register WebSocket endpoint for a newly imported adapter."""
@@ -2614,19 +2738,17 @@ class QtineApp:
         if adapter is None:
             return
 
-        # Check manifest for ws_endpoint
-        sources = self.bot.adapter_manager._adapter_sources
-        source = sources.get(adapter_name, {})
+        # Search for adapter.json in adapters/ directory
         manifest = {}
-
-        if source.get("type") == "zip" or source.get("type") == "directory":
-            extract_dir = source.get("extract_to", "")
-            json_path = os.path.join(extract_dir, "adapter.json")
-            if os.path.isfile(json_path):
-                import json as _json
-
-                with open(json_path, "r", encoding="utf-8") as f:
-                    manifest = _json.load(f)
+        for root, _, files in os.walk("adapters"):
+            if "adapter.json" in files and adapter_name in root:
+                json_path = os.path.join(root, "adapter.json")
+                try:
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        manifest = json.load(f)
+                    break
+                except Exception:
+                    pass
 
         ws_endpoint = manifest.get("ws_endpoint", "")
         if ws_endpoint:

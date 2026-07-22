@@ -29,21 +29,18 @@ class OneBotV11Adapter(BaseAdapter):
 
     # ── lifecycle ────────────────────────────────────────────────────
 
-    def __init__(
-        self,
-        name: str = "onebot_v11",
-        access_token: str = "",
-        forward_ws_enabled: bool = False,
-        forward_ws_url: str = "",
-        reconnect_interval: float = 5,
-        heartbeat_interval: int = 30,
-    ):
-        super().__init__(name, "OneBot v11")
-        self.access_token = access_token
-        self.forward_ws_enabled = forward_ws_enabled
-        self.forward_ws_url = forward_ws_url
-        self.reconnect_interval = reconnect_interval
-        self.heartbeat_interval = heartbeat_interval
+    PROTOCOL_NAME = "OneBot v11"
+    DESCRIPTION = "OneBot V11 标准协议适配器，支持反向 WebSocket"
+    _builtin = True
+
+    def __init__(self, name: str = "", config: dict = None):
+        super().__init__(name=name or "onebot_v11", protocol="onebot_v11", config=config)
+        cfg = config or {}
+        self.access_token = cfg.get("access_token") or cfg.get("token", "")
+        self.forward_ws_enabled = cfg.get("forward_ws_enabled", False)
+        self.forward_ws_url = cfg.get("forward_ws_url", "")
+        self.reconnect_interval = cfg.get("reconnect_interval", 5)
+        self.heartbeat_interval = cfg.get("heartbeat_interval", 30)
 
         # reverse WS clients (NapCat -> Qtine)
         self._reverse_clients: Dict[str, Any] = {}

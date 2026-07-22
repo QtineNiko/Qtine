@@ -72,15 +72,23 @@ class PluginInfo:
 
 @dataclass
 class AdapterInfo:
-    name: str
-    protocol: str
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = ""
+    protocol: str = ""
     status: AdapterStatus = AdapterStatus.DISCONNECTED
+    enabled: bool = True
     connected_at: float = 0.0
     message_count: int = 0
     received_count: int = 0
     sent_count: int = 0
     error_count: int = 0
     account_id: str = ""
+    nickname: str = ""
+    remark: str = ""
+    config: Dict[str, Any] = field(default_factory=dict)
+    ws_port: int = 0
+    token: str = ""
+    builtin: bool = False
 
 
 @dataclass

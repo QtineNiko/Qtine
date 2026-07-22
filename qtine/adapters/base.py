@@ -2,20 +2,24 @@
 """Base adapter class for Qtine."""
 
 from abc import ABC, abstractmethod
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict
 from qtine.utils.models import Message, AdapterInfo, AdapterStatus
 from qtine.utils.logger import get_logger
 
 
 class BaseAdapter(ABC):
-    def __init__(self, name: str, protocol: str):
+    def __init__(self, name: str = "", protocol: str = "", config: Dict[str, Any] = None):
         self.name = name
         self.protocol = protocol
+        self.config = config or {}
         self.logger = get_logger()
         self._on_message_callback: Optional[Callable] = None
         self._on_event_callback: Optional[Callable] = None
         self._adapter_info = AdapterInfo(
-            name=name, protocol=protocol
+            name=name,
+            protocol=protocol,
+            config=self.config,
+            builtin=getattr(self, "_builtin", False),
         )
         self._running = False
         self.bot = None
@@ -27,6 +31,14 @@ class BaseAdapter(ABC):
     @property
     def running(self) -> bool:
         return self._running
+
+    @property
+    def enabled(self) -> bool:
+        return self._adapter_info.enabled
+
+    @enabled.setter
+    def enabled(self, value: bool):
+        self._adapter_info.enabled = value
 
     @abstractmethod
     def start(self) -> None: ...
@@ -58,11 +70,13 @@ class BaseAdapter(ABC):
             except Exception as e:
                 self.logger.error(f"Adapter event callback error: {e}")
 
-    def _update_status(self, status: AdapterStatus, account_id: str = ""):
+    def _update_status(self, status: AdapterStatus, account_id: str = "", nickname: str = ""):
         previous = self._adapter_info.status
         self._adapter_info.status = status
         if account_id:
             self._adapter_info.account_id = account_id
+        if nickname:
+            self._adapter_info.nickname = nickname
         if previous == status or self.bot is None:
             return
         bus = getattr(self.bot, "event_bus", None)

@@ -46,7 +46,8 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     <div class="brand">Qtine <span>消息</span></div>
   </div>
   <button class="btn" onclick="load()" style="margin-right:8px">刷新</button>
-  <button class="btn danger" onclick="clearAll()">清空</button>
+  <button class="btn danger" onclick="clearAll()" style="margin-right:8px">清空</button>
+  <button class="btn" onclick="logout()">退出登录</button>
 </header>
 <div class="layout">
   <nav class="nav">
@@ -66,7 +67,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       <select id="group-select" onchange="load()">
         <option value="">全部会话</option>
       </select>
-      <input type="text" id="search-input" placeholder="搜索消息内容..." style="flex:1;min-width:200px">
+      <input type="text" id="search-input" placeholder="搜索消息内容..." style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')load()">
       <button class="btn primary" onclick="load()">搜索</button>
     </div>
     <div class="msg-list" id="msg-list"></div>
@@ -80,6 +81,11 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
 <div class="snackbar" id="sb"></div>
 <script>
 (function(){
+  function checkAuth(r){
+    if(r.status===401){localStorage.removeItem('qtine_auth');location.href='/webui/login';return Promise.reject(new Error('Unauthorized'))}
+    return r;
+  }
+  function logout(){fetch('/api/logout',{method:'POST'}).finally(function(){localStorage.removeItem('qtine_auth');location.href='/webui/login'})}window.logout=logout
   var page = 0, pageSize = 50, hasMore = true;
   function toast(m){var s=document.getElementById('sb');s.textContent=m;s.classList.add('show');clearTimeout(s._t);s._t=setTimeout(function(){s.classList.remove('show')},3000)}
   function getGroup(){return document.getElementById('group-select').value}
@@ -93,7 +99,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     return name.charAt(0).toUpperCase();
   }
   function loadGroups(){
-    fetch('/api/messages/groups').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/messages/groups').then(checkAuth).then(function(r){return r.json()}).then(function(d){
       var sel = document.getElementById('group-select');
       var current = sel.value;
       sel.innerHTML = '<option value="">全部会话</option>';
@@ -116,7 +122,7 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
     var url = '/api/messages?limit='+pageSize+'&offset='+(page*pageSize);
     if(gid)url += '&group_id='+encodeURIComponent(gid);
     if(kw)url += '&keyword='+encodeURIComponent(kw);
-    fetch(url).then(function(r){return r.json()}).then(function(d){
+    fetch(url).then(checkAuth).then(function(r){return r.json()}).then(function(d){
       if(!d.success||!d.messages||!d.messages.length){
         list.innerHTML = '<div class="empty">暂无消息</div>';
         hasMore = false;
@@ -131,18 +137,18 @@ body{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:
       document.getElementById('prev-btn').disabled = page===0;
       document.getElementById('next-btn').disabled = !hasMore;
     });
-  }
+  }window.load=load
   function prevPage(){if(page>0){page--;load()}}
   function nextPage(){if(hasMore){page++;load()}}
   function clearAll(){
     if(!confirm('确定要清空所有消息历史吗？此操作不可撤销。'))return;
     var gid = getGroup();
     var body = gid ? JSON.stringify({group_id:gid}) : '{}';
-    fetch('/api/messages/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:body}).then(function(r){return r.json()}).then(function(d){
+    fetch('/api/messages/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:body}).then(checkAuth).then(function(r){return r.json()}).then(function(d){
       if(d.success){toast('已清空 '+d.cleared+' 条消息');page=0;load();loadGroups()}
     });
   }
-  function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
   window.clearAll = clearAll;
   window.prevPage = prevPage;
   window.nextPage = nextPage;

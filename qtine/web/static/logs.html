@@ -56,24 +56,37 @@ select{padding:8px 12px;background:var(--sf);color:var(--on-s);border:1px solid 
 <script>
 (function(){
   function logout(){fetch('/api/logout',{method:'POST'}).finally(function(){localStorage.removeItem('qtine_auth');location.href='/webui/login'})}window.logout=logout
+  function escapeHtml(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
   function load(){
     var lvl=document.getElementById('lvl').value;
     var log=document.getElementById('log');
     log.innerHTML='<div style="color:var(--on-sv);padding:40px;text-align:center">加载中...</div>';
-    fetch('/api/logs?level='+lvl+'&lines=300').then(function(r){return r.json()}).then(function(d){
+    fetch('/api/logs?level='+lvl+'&lines=300').then(function(r){
+      if(r.status===401){location.href='/webui/login';return}
+      return r.json()
+    }).then(function(d){
+      if(!d)return;
       var entries=d.entries||[];
       if(!entries.length){log.innerHTML='<div class="log-line" style="color:var(--on-sv)">暂无日志。</div>';return}
       var html='';
       entries.forEach(function(e){
-        html+='<div class="log-line"><span class="ts">['+e.timestamp+']</span> <span class="lv-'+e.level+'">['+e.level+']</span> '+e.message.replace(/</g,'&lt;')+'</div>';
+        html+='<div class="log-line"><span class="ts">['+escapeHtml(e.timestamp)+']</span> <span class="lv-'+e.level+'">['+escapeHtml(e.level)+']</span> '+escapeHtml(e.message)+'</div>';
       });
       log.innerHTML=html;
       log.scrollTop=log.scrollHeight;
     }).catch(function(){log.innerHTML='<div class="log-line" style="color:var(--e)">加载失败。</div>'});
   }
   function clearLogs(){
-    fetch('/api/logs/clear',{method:'POST'}).then(function(){load()});
+    if(!confirm('确定要清空所有日志吗？'))return;
+    fetch('/api/logs/clear',{method:'POST'}).then(function(r){
+      if(r.status===401){location.href='/webui/login';return}
+      load()
+    });
   }
+  window.load=load;
+  window.clearLogs=clearLogs;
   load();
   setInterval(function(){if(document.getElementById('auto').checked)load()},5000);
 })();
